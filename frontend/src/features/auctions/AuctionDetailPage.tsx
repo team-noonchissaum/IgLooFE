@@ -48,7 +48,7 @@ export function AuctionDetailPage() {
   useAuctionWebSocket(
     Number.isInteger(id) ? id : null,
     (data) => setWsSnapshot(data),
-    () => queryClient.invalidateQueries({ queryKey: ["auction", id] }),
+    () => queryClient.invalidateQueries({ queryKey: ["auction", id] })
   );
 
   const currentPrice =
@@ -83,7 +83,7 @@ export function AuctionDetailPage() {
     if (!Number.isFinite(amount) || amount < minNextBid(currentPrice)) {
       addToast(
         `최소 입찰가는 ${formatKrw(minNextBid(currentPrice))}입니다.`,
-        "error",
+        "error"
       );
       return;
     }
@@ -96,7 +96,7 @@ export function AuctionDetailPage() {
     const update = () => {
       const sec = Math.max(
         0,
-        Math.floor((new Date(endAt).getTime() - Date.now()) / 1000),
+        Math.floor((new Date(endAt).getTime() - Date.now()) / 1000)
       );
       setRemaining(sec);
     };
@@ -110,7 +110,7 @@ export function AuctionDetailPage() {
   const s = remaining % 60;
   const timeStr = `${String(h).padStart(2, "0")}:${String(m).padStart(
     2,
-    "0",
+    "0"
   )}:${String(s).padStart(2, "0")}`;
 
   if (isLoading || !auction) {
@@ -185,7 +185,7 @@ export function AuctionDetailPage() {
                 {auction.title}
               </h1>
               <div className="flex items-center gap-3 mt-2 text-text-muted text-sm">
-                경매 #{auction.id}
+                경매 #{auction.auctionId}
               </div>
             </div>
             {/* 찜: 부분구현 - 상세 DTO에 itemId 없으면 버튼만 비활성/툴팁 */}

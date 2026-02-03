@@ -1,11 +1,10 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { auctionApi } from "@/services/auctionApi";
-import { api } from "@/lib/api";
+import { walletApi } from "@/services/walletApi";
 import { formatKrw } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { Wallet } from "@/lib/types";
 
 export function AuctionResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,13 +12,13 @@ export function AuctionResultPage() {
 
   const { data: auction, isLoading } = useQuery({
     queryKey: ["auction", auctionId],
-    queryFn: () => auctionApi.getById(auctionId).then((r) => r.data),
+    queryFn: () => auctionApi.getById(auctionId),
     enabled: Number.isInteger(auctionId),
   });
 
   const { data: wallet } = useQuery({
     queryKey: ["wallet", "me"],
-    queryFn: () => api.get<Wallet>("/api/wallets/me").then((r) => r.data),
+    queryFn: () => walletApi.getMe(),
   });
 
   if (isLoading || !auction) {

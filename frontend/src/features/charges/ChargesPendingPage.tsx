@@ -15,7 +15,7 @@ export function ChargesPendingPage() {
   const firstItemRef = useRef<HTMLLIElement>(null);
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.add);
-  const [page, setPage] = useState(0);
+  const [page] = useState(0);
   const size = 10;
 
   const { data: list = [], isLoading } = useQuery({

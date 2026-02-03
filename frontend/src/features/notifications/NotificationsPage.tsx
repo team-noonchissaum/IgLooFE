@@ -43,7 +43,7 @@ export function NotificationsPage() {
     <main className="max-w-[800px] mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-text-main">알림</h1>
-        {notifications.some((n) => !n.read) && (
+        {notifications.some((n) => !n.readAt) && (
           <Button
             variant="secondary"
             size="sm"

@@ -44,13 +44,13 @@ export function AuctionLivePage() {
   useAuctionWebSocket(
     Number.isInteger(auctionId) ? auctionId : null,
     (data) => setWsSnapshot(data),
-    () => queryClient.invalidateQueries({ queryKey: ["bid", auctionId] }),
+    () => queryClient.invalidateQueries({ queryKey: ["bid", auctionId] })
   );
 
   const currentPrice =
     wsSnapshot.currentPrice ??
     auction?.currentPrice ??
-    auction?.startingPrice ??
+    auction?.startPrice ??
     0;
   const bidCount = wsSnapshot.bidCount ?? auction?.bidCount ?? 0;
   const endAt = wsSnapshot.endAt ?? auction?.endAt;
@@ -59,10 +59,7 @@ export function AuctionLivePage() {
     if (!endAt) return;
     const update = () =>
       setRemaining(
-        Math.max(
-          0,
-          Math.floor((new Date(endAt).getTime() - Date.now()) / 1000),
-        ),
+        Math.max(0, Math.floor((new Date(endAt).getTime() - Date.now()) / 1000))
       );
     update();
     const t = setInterval(update, 1000);

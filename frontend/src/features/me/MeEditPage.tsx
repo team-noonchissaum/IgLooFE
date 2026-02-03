@@ -2,18 +2,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
-import type { UserProfile } from "@/lib/types";
+import { userApi } from "@/services/userApi";
 
 const schema = z.object({
   nickname: z.string().min(1, "닉네임을 입력하세요"),
-  profileImageUrl: z.string().url().optional().or(z.literal("")),
+  profileUrl: z.string().url().optional().or(z.literal("")),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -25,7 +24,7 @@ export function MeEditPage() {
 
   const { data: user } = useQuery({
     queryKey: ["users", "me"],
-    queryFn: () => api.get<UserProfile>("/api/users/me").then((r) => r.data),
+    queryFn: () => userApi.getProfile(),
   });
 
   const {
@@ -35,15 +34,15 @@ export function MeEditPage() {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     values: user
-      ? { nickname: user.nickname, profileImageUrl: user.profileImageUrl ?? "" }
+      ? { nickname: user.nickname, profileUrl: user.profileUrl ?? "" }
       : undefined,
   });
 
   const updateProfile = useMutation({
     mutationFn: (data: FormData) =>
-      api.patch("/api/users/me", {
+      userApi.updateProfile({
         nickname: data.nickname,
-        profileImageUrl: data.profileImageUrl || undefined,
+        profileUrl: data.profileUrl ?? undefined,
       }),
     onSuccess: () => {
       addToast("프로필이 수정되었습니다.", "success");
@@ -91,7 +90,9 @@ export function MeEditPage() {
             프로필 이미지 URL
           </label>
           <input
-            {...register("profileUrl")}
+            {...register("profileUrl", {
+              setValueAs: (v) => (v === "" ? undefined : v),
+            })}
             className="w-full rounded-lg border border-border px-4 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
             placeholder="https://..."
           />

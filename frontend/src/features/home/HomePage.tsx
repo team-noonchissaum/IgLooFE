@@ -22,7 +22,7 @@ const sortLabels: Record<SortType, string> = {
 };
 
 export function HomePage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const categoryIdFromUrl = searchParams.get("categoryId");
   const [categoryId, setCategoryIdState] = useState<number | undefined>(() =>
     categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined
@@ -31,14 +31,6 @@ export function HomePage() {
     const id = categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined;
     setCategoryIdState(Number.isNaN(id) ? undefined : id);
   }, [categoryIdFromUrl]);
-
-  const setCategoryId = (id: number | undefined) => {
-    setCategoryIdState(id);
-    const next = new URLSearchParams(searchParams);
-    if (id == null) next.delete("categoryId");
-    else next.set("categoryId", String(id));
-    setSearchParams(next, { replace: true });
-  };
 
   const [keyword, setKeyword] = useState("");
   const [sort, setSort] = useState<SortType>("LATEST");
