@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IgLoo 실시간 중계 테스트</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+        .status { font-weight: bold; margin-bottom: 10px; }
+        .data-box { background: #f4f4f4; padding: 15px; border-radius: 5px; margin-top: 10px; }
+        .log { height: 200px; overflow-y: auto; background: #222; color: #0f0; padding: 10px; font-family: monospace; font-size: 12px; margin-top: 10px; }
+        input { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>IgLoo 실시간 중계 테스트</h2>
+    
+    <label>JWT Token (Bearer 제외):</label>
+    <input type="text" id="token" placeholder="JWT 토큰을 입력하세요">
+    
+    <label>Auction ID:</label>
+    <input type="number" id="auctionId" value="1">
+    
+    <button onclick="connect()">연결 및 중계 시작</button>
+
+    <div class="data-box">
+        <div class="status">상태: <span id="connStatus" style="color: red;">연결 안됨</span></div>
+        <div>현재 입찰가: <span id="currentPrice" style="font-size: 24px; color: blue;">-</span> 원</div>
+        <div>입찰 수: <span id="bidCount">-</span></div>
+        <div>남은 시간: <span id="endTime">-</span></div>
+        <div>연장 여부: <span id="isExtended">-</span></div>
+    </div>
+
+    <h4>실시간 로그</h4>
+    <div id="log" class="log"></div>
+</div>
+
+<script>
+    let stompClient = null;
+
+    function addLog(msg) {
+        const logDiv = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        logDiv.innerHTML += `[${time}] ${msg}<br>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function connect() {
+        const token = document.getElementById('token').value;
+        const auctionId = document.getElementById('auctionId').value;
+
+        if (!token) {
+            alert("JWT 토큰을 입력해주세요!");
+            return;
+        }
+
+        const socket = new SockJS('http://localhost:8080/ws');
+        stompClient = Stomp.over(socket);
+
+        // STOMP 연결 헤더에 JWT 추가
+        const headers = {
+            'Authorization': 'Bearer ' + token
+        };
+
+        stompClient.connect(headers, function (frame) {
+            document.getElementById('connStatus').innerText = "연결됨";
+            document.getElementById('connStatus').style.color = "green";
+            addLog("Connected: " + frame);
+
+            // 1. 실시간 중계 채널 구독 (1초마다 스냅샷 + 입찰 이벤트)
+            stompClient.subscribe('/topic/auction/' + auctionId, function (message) {
+                const data = JSON.parse(message.body);
+                updateUI(data.payload);
+                addLog("Received: " + data.type);
+            });
+
+            // 2. 초기 데이터 요청 (스냅샷)
+            stompClient.send("/app/auctions/" + auctionId + "/snapshot", {}, {});
+            addLog("Requested initial snapshot");
+
+        }, function (error) {
+            addLog("Error: " + error);
+            document.getElementById('connStatus').innerText = "연결 실패";
+            document.getElementById('connStatus').style.color = "red";
+        });
+    }
+
+    function updateUI(payload) {
+        if (!payload) return;
+        
+        if (payload.currentPrice !== undefined) document.getElementById('currentPrice').innerText = payload.currentPrice.toLocaleString();
+        if (payload.bidCount !== undefined) document.getElementById('bidCount').innerText = payload.bidCount;
+        if (payload.endAt !== undefined) document.getElementById('endTime').innerText = payload.endAt;
+        if (payload.isExtended !== undefined) document.getElementById('isExtended').innerText = payload.isExtended ? "Y" : "N";
+    }
+</script>
+
+</body>
+</html>

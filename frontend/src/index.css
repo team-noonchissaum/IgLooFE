@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #00a3ff;
+  --primary-hover: #0089d9;
+  --primary-light: #e6f6ff;
+  --surface: #ffffff;
+  --border: #f1f3f5;
+  --text-main: #1a1c1e;
+  --text-muted: #868e96;
+}
+
+body {
+  font-family: "Plus Jakarta Sans", "Pretendard", sans-serif;
+  @apply bg-white text-[#1a1c1e] min-h-screen antialiased;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+.fill-icon {
+  font-variation-settings: "FILL" 1;
+}
+
+@keyframes pulse-blue {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+}
+.live-dot-blue {
+  @apply w-2 h-2 rounded-full bg-primary inline-block;
+  animation: pulse-blue 2s infinite ease-in-out;
+}
+
+.sky-shadow {
+  box-shadow: 0 10px 30px -10px rgba(0, 163, 255, 0.12);
+}
+.sky-shadow-hover:hover {
+  box-shadow: 0 20px 40px -12px rgba(0, 163, 255, 0.15);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-gray-200 rounded-full;
+}
