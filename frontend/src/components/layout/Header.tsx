@@ -1,13 +1,28 @@
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { notificationApi } from "@/services/notificationApi";
+import { userApi } from "@/services/userApi";
 import { walletApi } from "@/services/walletApi";
 
 export function Header() {
   const navigate = useNavigate();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const role = useAuthStore((s) => s.role);
+  const setRole = useAuthStore((s) => s.setRole);
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const logout = useAuthStore((s) => s.logout);
+
+  const { data: profile } = useQuery({
+    queryKey: ["users", "me"],
+    queryFn: () => userApi.getProfile(),
+    enabled: isAuth && role == null,
+  });
+
+  useEffect(() => {
+    if (profile?.role != null) setRole(profile.role);
+  }, [profile?.role, setRole]);
 
   const { data: unreadCount } = useQuery({
     queryKey: ["notifications", "unread-count"],
@@ -101,6 +116,17 @@ export function Header() {
                   >
                     지갑
                   </Link>
+                  {isAdmin && (
+                    <Link
+                      to="/admin"
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50 rounded-lg mx-1 text-primary font-medium"
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        admin_panel_settings
+                      </span>
+                      관리자페이지
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={handleLogout}

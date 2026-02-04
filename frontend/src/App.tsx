@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
-import { RequireAuth } from "@/routes/guards";
+import { RequireAuth, RequireAdmin } from "@/routes/guards";
 
 import { HomePage } from "@/features/home/HomePage";
 import { AuctionDetailPage } from "@/features/auctions/AuctionDetailPage";
@@ -97,9 +97,9 @@ function App() {
           <Route
             path="admin"
             element={
-              <RequireAuth>
+              <RequireAdmin>
                 <AdminPage />
-              </RequireAuth>
+              </RequireAdmin>
             }
           />
           <Route
