@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,9 +20,24 @@ type FormData = z.infer<typeof schema>;
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get("redirect") ?? "/me";
   const addToast = useToastStore((s) => s.add);
   const setTokens = useAuthStore((s) => s.setTokens);
   const [mode, setMode] = useState<"login" | "signup">("login");
+
+  const hasShownRedirectToast = useRef(false);
+  useEffect(() => {
+    if (
+      !hasShownRedirectToast.current &&
+      redirect &&
+      redirect !== "/me" &&
+      redirect.startsWith("/")
+    ) {
+      hasShownRedirectToast.current = true;
+      addToast("경매 등록을 위해 로그인해 주세요.", "info");
+    }
+  }, [redirect, addToast]);
 
   const {
     register,
@@ -43,7 +58,7 @@ export function LoginPage() {
     onSuccess: (res) => {
       setTokens(res.data.accessToken, res.data.refreshToken);
       addToast("로그인되었습니다.", "success");
-      navigate("/me", { replace: true });
+      navigate(redirect.startsWith("/") ? redirect : "/me", { replace: true });
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -66,7 +81,7 @@ export function LoginPage() {
         })
         .then((loginRes) => {
           setTokens(loginRes.data.accessToken, loginRes.data.refreshToken);
-          navigate("/me", { replace: true });
+          navigate(redirect.startsWith("/") ? redirect : "/me", { replace: true });
         })
         .catch((err) => addToast(getApiErrorMessage(err), "error"));
     },

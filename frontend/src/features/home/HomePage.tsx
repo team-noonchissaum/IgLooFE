@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/stores/authStore";
+import { useToastStore } from "@/stores/toastStore";
 import { useQuery } from "@tanstack/react-query";
 import { auctionApi } from "@/services/auctionApi";
 import { formatKrw } from "@/lib/format";
@@ -23,6 +25,9 @@ const sortLabels: Record<SortType, string> = {
 
 export function HomePage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const addToast = useToastStore((s) => s.add);
   const categoryIdFromUrl = searchParams.get("categoryId");
   const [categoryId, setCategoryIdState] = useState<number | undefined>(() =>
     categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined
@@ -57,13 +62,17 @@ export function HomePage() {
     retry: false,
   });
 
+  const endedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED"];
+  const auctions = (searchData?.content ?? []).filter(
+    (a) => !endedStatuses.includes(a.status)
+  );
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setKeyword(searchInput);
     setPage(0);
   };
 
-  const auctions = searchData?.content ?? [];
   const hasMore = searchData != null && !searchData.last;
 
   return (
@@ -74,15 +83,31 @@ export function HomePage() {
             <h2 className="text-2xl font-bold tracking-tight text-text-main">
               진행 중인 경매
             </h2>
-            <Link
-              to="/auctions/new"
-              className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover flex items-center gap-2 transition-colors shrink-0"
-            >
-              <span className="material-symbols-outlined text-lg">
-                add_circle
-              </span>
-              경매 등록
-            </Link>
+            {isAuth ? (
+              <Link
+                to="/auctions/new"
+                className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover flex items-center gap-2 transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-lg">
+                  add_circle
+                </span>
+                경매 등록
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  addToast("경매 등록을 위해 로그인해 주세요.", "info");
+                  navigate("/login?redirect=/auctions/new");
+                }}
+                className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover flex items-center gap-2 transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-lg">
+                  add_circle
+                </span>
+                경매 등록
+              </button>
+            )}
             <form
               onSubmit={handleSearch}
               className="flex items-center gap-2 flex-wrap"

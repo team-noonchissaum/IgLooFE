@@ -1,18 +1,33 @@
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notificationApi } from "@/services/notificationApi";
 import { formatRelative } from "@/lib/format";
 import { useNotificationWebSocket } from "@/hooks/useNotificationWebSocket";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import type { NotificationRes } from "@/lib/types";
+
+function getNotificationLink(n: NotificationRes): string | null {
+  if (n.refType == null || n.refId == null) return null;
+  const type = String(n.refType).toUpperCase();
+  if (type === "AUCTION") return `/auctions/${n.refId}`;
+  return null;
+}
 
 export function NotificationsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   useNotificationWebSocket();
 
-  const { data: notifications = [], isLoading } = useQuery({
+  const { data: rawNotifications = [], isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => notificationApi.list(),
   });
+
+  const notifications = [...rawNotifications].sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   const readOne = useMutation({
     mutationFn: (id: number) => notificationApi.markRead(id),
@@ -58,34 +73,53 @@ export function NotificationsPage() {
         {notifications.length === 0 ? (
           <li className="p-12 text-center text-text-muted">알림이 없습니다.</li>
         ) : (
-          notifications.map((n) => (
-            <li
-              key={n.id}
-              className={`p-4 flex items-start gap-4 hover:bg-gray-50 transition-colors ${
-                !n.readAt ? "bg-primary-light/20" : ""
-              }`}
-            >
-              <span className="material-symbols-outlined text-primary shrink-0">
-                notifications
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-text-main">{n.message}</p>
-                <p className="text-xs text-text-muted mt-2">
-                  {formatRelative(n.createdAt)}
-                </p>
-              </div>
-              {!n.readAt && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => readOne.mutate(n.id)}
-                  loading={readOne.isPending}
-                >
-                  읽음
-                </Button>
-              )}
-            </li>
-          ))
+          notifications.map((n) => {
+            const link = getNotificationLink(n);
+            const content = (
+              <>
+                <span className="material-symbols-outlined text-primary shrink-0">
+                  notifications
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-text-main">{n.message}</p>
+                  <p className="text-xs text-text-muted mt-2">
+                    {formatRelative(n.createdAt)}
+                  </p>
+                </div>
+                {!n.readAt && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      readOne.mutate(n.id);
+                    }}
+                    loading={readOne.isPending}
+                  >
+                    읽음
+                  </Button>
+                )}
+              </>
+            );
+            return (
+              <li
+                key={n.id}
+                className={`p-4 flex items-start gap-4 hover:bg-gray-50 transition-colors ${
+                  !n.readAt ? "bg-primary-light/20" : ""
+                } ${link ? "cursor-pointer" : ""}`}
+                onClick={() => {
+                  if (link) {
+                    if (!n.readAt) readOne.mutate(n.id);
+                    navigate(link);
+                  }
+                }}
+                role={link ? "button" : undefined}
+              >
+                {content}
+              </li>
+            );
+          })
         )}
       </ul>
       <p className="text-sm text-text-muted mt-4">

@@ -6,9 +6,10 @@ import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuthStore } from "@/stores/authStore";
 import { userApi } from "@/services/userApi";
+import { imageApi } from "@/services/imageApi";
 
 const schema = z.object({
   nickname: z.string().min(1, "닉네임을 입력하세요"),
@@ -30,6 +31,7 @@ export function MeEditPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -56,6 +58,16 @@ export function MeEditPage() {
     onSuccess: () => {
       useAuthStore.getState().logout();
       window.location.href = "/";
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadProfileImage = useMutation({
+    mutationFn: (file: File) => imageApi.uploadSingle(file, "profile"),
+    onSuccess: (url) => {
+      setValue("profileUrl", url, { shouldValidate: true });
+      addToast("프로필 이미지가 업로드되었습니다.", "success");
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -97,8 +109,31 @@ export function MeEditPage() {
             placeholder="https://..."
           />
           <p className="text-xs text-text-muted mt-1">
-            파일 업로드는 미지원이며 URL 저장만 가능합니다.
+            URL을 입력하거나 파일을 업로드할 수 있습니다.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2 items-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                uploadProfileImage.mutate(file);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              loading={uploadProfileImage.isPending}
+            >
+              파일 업로드
+            </Button>
+          </div>
         </div>
         <Button type="submit" loading={updateProfile.isPending}>
           저장

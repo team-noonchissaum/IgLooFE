@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,7 @@ import { categoryApi } from "@/services/categoryApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
+import { imageApi } from "@/services/imageApi";
 
 const schema = z.object({
   title: z.string().min(1, "제목을 입력하세요"),
@@ -33,11 +34,24 @@ export function AuctionRegisterPage() {
   const addToast = useToastStore((s) => s.add);
   const [imageInput, setImageInput] = useState("");
   const [imageList, setImageList] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: () => categoryApi.list(),
   });
+
+  const mainCategories = categories.filter((c) => c.parentId === null);
+  const [mainCategoryId, setMainCategoryId] = useState<number | null>(null);
+  const subCategories = mainCategoryId
+    ? categories.filter((c) => c.parentId === mainCategoryId)
+    : [];
+  const selectableCategories =
+    subCategories.length > 0
+      ? subCategories
+      : mainCategoryId
+        ? mainCategories.filter((c) => c.id === mainCategoryId)
+        : [];
 
   const {
     register,
@@ -89,10 +103,23 @@ export function AuctionRegisterPage() {
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
+  const uploadImages = useMutation({
+    mutationFn: (files: File[]) => imageApi.uploadMultiple(files, "item"),
+    onSuccess: (urls) => {
+      setImageList((prev) => {
+        const next = [...prev, ...urls];
+        setValue("imageUrls", next);
+        return next;
+      });
+      addToast("이미지 업로드가 완료되었습니다.", "success");
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
   const onSubmit = (data: FormData) => {
     if (imageList.length === 0) {
       addToast(
-        "이미지 URL을 1개 이상 추가하세요. (부분구현: URL 리스트 방식)",
+        "이미지를 1개 이상 추가하세요.",
         "error"
       );
       return;
@@ -133,8 +160,35 @@ export function AuctionRegisterPage() {
               </h2>
             </div>
             <p className="text-text-muted text-sm mb-6">
-              이미지 URL을 입력하세요. (현재 서버는 URL 리스트만 지원)
+              이미지 URL을 입력하거나 파일 업로드를 사용할 수 있습니다.
             </p>
+            <div className="flex flex-wrap gap-2 mb-4 items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length === 0) return;
+                  uploadImages.mutate(files);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                loading={uploadImages.isPending}
+              >
+                파일 업로드
+              </Button>
+              <span className="text-xs text-text-muted">
+                업로드 후 URL이 자동으로 추가됩니다.
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2 mb-4">
               <input
                 type="url"
@@ -238,14 +292,39 @@ export function AuctionRegisterPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-text-main mb-1.5">
-                    카테고리
+                    카테고리 (대분류)
                   </label>
                   <select
-                    {...register("categoryId", { valueAsNumber: true })}
+                    value={mainCategoryId ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value ? Number(e.target.value) : null;
+                      setMainCategoryId(val);
+                      setValue("categoryId", 0);
+                    }}
                     className="w-full rounded-lg border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 px-4 py-2"
                   >
+                    <option value="">선택</option>
+                    {mainCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-text-main mb-1.5">
+                    카테고리 (소분류)
+                  </label>
+                  <select
+                    {...register("categoryId", {
+                      valueAsNumber: true,
+                      onChange: (e) => setValue("categoryId", Number(e.target.value)),
+                    })}
+                    className="w-full rounded-lg border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 px-4 py-2"
+                    disabled={!mainCategoryId}
+                  >
                     <option value={0}>선택</option>
-                    {categories?.map((c) => (
+                    {selectableCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>

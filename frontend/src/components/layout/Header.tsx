@@ -3,6 +3,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { useQuery } from "@tanstack/react-query";
 import { notificationApi } from "@/services/notificationApi";
 import { walletApi } from "@/services/walletApi";
+import { userApi } from "@/services/userApi";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export function Header() {
   const navigate = useNavigate();
@@ -18,6 +20,12 @@ export function Header() {
   const { data: wallet } = useQuery({
     queryKey: ["wallet", "me"],
     queryFn: () => walletApi.getMe(),
+    enabled: isAuth,
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ["users", "me"],
+    queryFn: () => userApi.getProfile(),
     enabled: isAuth,
   });
 
@@ -43,6 +51,7 @@ export function Header() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-2 shrink-0">
+          <ThemeToggle />
           {isAuth ? (
             <>
               <Link
@@ -75,29 +84,37 @@ export function Header() {
                   aria-expanded="false"
                   aria-haspopup="true"
                 >
-                  <span className="text-sm font-semibold px-2">내 메뉴</span>
-                  <span className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-primary">
-                      person
-                    </span>
+                  <span className="text-sm font-semibold px-2">마이페이지</span>
+                  <span className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden shrink-0">
+                    {profile?.profileUrl ? (
+                      <img
+                        src={profile.profileUrl}
+                        alt="프로필"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="material-symbols-outlined text-primary">
+                        person
+                      </span>
+                    )}
                   </span>
                 </button>
                 <div className="absolute right-0 top-full mt-1 py-2 w-48 bg-white rounded-xl border border-border shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                   <Link
                     to="/me"
-                    className="block px-4 py-2 text-sm hover:bg-gray-50 rounded-lg mx-1"
+                    className="block px-4 py-2 text-sm text-text-main hover:bg-gray-100 rounded-lg mx-1 text-left"
                   >
                     내 정보
                   </Link>
                   <Link
                     to="/me/edit"
-                    className="block px-4 py-2 text-sm hover:bg-gray-50 rounded-lg mx-1"
+                    className="block px-4 py-2 text-sm text-text-main hover:bg-gray-100 rounded-lg mx-1 text-left"
                   >
                     프로필 수정
                   </Link>
                   <Link
                     to="/wallet"
-                    className="block px-4 py-2 text-sm hover:bg-gray-50 rounded-lg mx-1"
+                    className="block px-4 py-2 text-sm text-text-main hover:bg-gray-100 rounded-lg mx-1 text-left"
                   >
                     지갑
                   </Link>

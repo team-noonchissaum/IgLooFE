@@ -32,10 +32,16 @@ export function AuctionDetailPage() {
     status?: string;
   }>({});
 
-  const { data: auction, isLoading } = useQuery({
+  const {
+    data: auction,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ["auction", id],
     queryFn: () => auctionApi.getById(id),
-    enabled: Number.isInteger(id),
+    enabled: Number.isInteger(id) && id > 0,
+    retry: false,
   });
 
   const { data: bidPage } = useQuery({
@@ -91,6 +97,22 @@ export function AuctionDetailPage() {
   };
 
   const [remaining, setRemaining] = useState(0);
+  const [imgIndex, setImgIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  useEffect(() => {
+    setImgIndex(0);
+  }, [id]);
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleEscape = (e: KeyboardEvent) =>
+      e.key === "Escape" && setLightboxOpen(false);
+    document.addEventListener("keydown", handleEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [lightboxOpen]);
   useEffect(() => {
     if (!endAt) return;
     const update = () => {
@@ -113,6 +135,44 @@ export function AuctionDetailPage() {
     "0"
   )}:${String(s).padStart(2, "0")}`;
 
+  const invalidId = !Number.isInteger(id) || id <= 0;
+  if (invalidId) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-6 py-8">
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <p className="text-text-muted font-medium">잘못된 경매 번호입니다.</p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-primary font-semibold hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (isError) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-6 py-8">
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <p className="text-text-muted font-medium">
+            경매 정보를 불러올 수 없습니다.
+          </p>
+          <p className="mt-2 text-sm text-text-muted">
+            {error && getApiErrorMessage(error)}
+          </p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-primary font-semibold hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (isLoading || !auction) {
     return (
       <main className="max-w-[1280px] mx-auto px-6 py-8">
@@ -130,9 +190,11 @@ export function AuctionDetailPage() {
     );
   }
 
-  const img = auction.imageUrls?.[0];
+  const images = auction.imageUrls?.filter(Boolean) ?? [];
+  const currentImg = images[imgIndex];
 
   return (
+    <>
     <main className="max-w-[1280px] mx-auto px-6 py-8">
       <nav className="flex items-center gap-2 text-sm text-text-muted mb-6">
         <Link to="/" className="hover:text-primary">
@@ -145,13 +207,74 @@ export function AuctionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-7 space-y-6">
           <div className="relative group">
-            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 border border-border">
-              {img ? (
-                <img
-                  src={img}
-                  alt={auction.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
+            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 border border-border relative">
+              {currentImg ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(true)}
+                    className="absolute inset-0 w-full h-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset"
+                    aria-label="사진 전체 보기"
+                  >
+                    <img
+                      src={currentImg}
+                      alt={`${auction.title} ${imgIndex + 1}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 cursor-zoom-in"
+                    />
+                  </button>
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImgIndex((i) =>
+                            i <= 0 ? images.length - 1 : i - 1
+                          );
+                        }}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors z-10"
+                        aria-label="이전 이미지"
+                      >
+                        <span className="material-symbols-outlined">
+                          chevron_left
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImgIndex((i) =>
+                            i >= images.length - 1 ? 0 : i + 1
+                          );
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors z-10"
+                        aria-label="다음 이미지"
+                      >
+                        <span className="material-symbols-outlined">
+                          chevron_right
+                        </span>
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                        {images.map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setImgIndex(i);
+                            }}
+                            className={`w-2 h-2 rounded-full transition-colors ${
+                              i === imgIndex
+                                ? "bg-white scale-125"
+                                : "bg-white/50 hover:bg-white/80"
+                            }`}
+                            aria-label={`이미지 ${i + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-text-muted">
                   <span className="material-symbols-outlined text-6xl">
@@ -346,6 +469,61 @@ export function AuctionDetailPage() {
         </div>
       </div>
     </main>
+
+    {lightboxOpen && currentImg && (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="사진 전체 보기"
+        onClick={() => setLightboxOpen(false)}
+      >
+        <button
+          type="button"
+          onClick={() => setLightboxOpen(false)}
+          className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
+          aria-label="닫기"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
+              aria-label="이전 이미지"
+            >
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
+              aria-label="다음 이미지"
+            >
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          </>
+        )}
+        <img
+          src={currentImg}
+          alt={`${auction.title} ${imgIndex + 1}`}
+          className="max-w-full max-h-[90vh] w-auto h-auto object-contain cursor-zoom-out"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm">
+          {imgIndex + 1} / {images.length}
+        </p>
+      </div>
+    )}
+    </>
   );
 }
 

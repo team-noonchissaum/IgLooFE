@@ -41,7 +41,21 @@ export function ChargesPendingPage() {
       queryClient.invalidateQueries({ queryKey: ["charges", "unchecked"] });
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
     },
-    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+    onError: (err) => {
+      const msg = getApiErrorMessage(err);
+      const isTossRelated =
+        /토스|toss|취소|cancel|payment|결제/i.test(msg) ||
+        (typeof err === "object" &&
+          err !== null &&
+          "response" in err &&
+          (err as { response?: { status?: number } }).response?.status === 400);
+      addToast(
+        isTossRelated
+          ? "환불 처리에 실패했습니다. 이미 처리된 결제이거나 토스페이먼츠 상태를 확인해 주세요."
+          : msg,
+        "error"
+      );
+    },
   });
 
   // 결제 완료 후 이동한 경우: 상단(방금 결제된 항목)으로 스크롤 + URL에서 from 제거

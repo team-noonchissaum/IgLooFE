@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { userApi } from "@/services/userApi";
 import { walletApi } from "@/services/walletApi";
 import { bidApi } from "@/services/bidApi";
-import { formatKrw } from "@/lib/format";
+import { formatDateTime, formatKrw } from "@/lib/format";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export function MePage() {
@@ -22,6 +22,12 @@ export function MePage() {
     queryFn: () => bidApi.myBids(),
   });
   const myBids = myBidsPage?.content ?? [];
+
+  const { data: myAuctionsPage } = useQuery({
+    queryKey: ["users", "me", "auctions"],
+    queryFn: () => userApi.getMyAuctions(),
+  });
+  const myAuctions = myAuctionsPage?.content ?? [];
 
   if (isLoading || !mypage) {
     return (
@@ -111,7 +117,7 @@ export function MePage() {
               </span>
             </Link>
           </div>
-          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm mb-6">
             <h2 className="text-lg font-bold text-text-main mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">
                 gavel
@@ -147,9 +153,46 @@ export function MePage() {
                 ))
               )}
             </ul>
-            <p className="text-sm text-text-muted mt-4">
-              내 등록 경매 목록은 서버 미지원으로 표시되지 않습니다.
-            </p>
+          </div>
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-text-main mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">
+                inventory
+              </span>
+              내 등록 경매
+            </h2>
+            <ul className="divide-y divide-border">
+              {myAuctions.length === 0 ? (
+                <li className="py-8 text-center text-text-muted">
+                  등록한 경매가 없습니다.
+                </li>
+              ) : (
+                myAuctions.slice(0, 10).map((a) => (
+                  <li
+                    key={a.auctionId}
+                    className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                  >
+                    <div>
+                      <Link
+                        to={`/auctions/${a.auctionId}`}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        {a.title}
+                      </Link>
+                      <p className="text-xs text-text-muted">
+                        종료: {formatDateTime(a.endAt)}
+                      </p>
+                    </div>
+                    <div className="text-sm text-text-main font-semibold">
+                      {formatKrw(a.currentPrice)}
+                      <span className="text-xs text-text-muted ml-2">
+                        {a.status}
+                      </span>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
           </div>
         </section>
       </div>
