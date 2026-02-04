@@ -58,7 +58,7 @@ export function WalletPage() {
     if (amount < 10000) {
       addToast(
         "최소 출금액은 10,000원입니다. 수수료 1,000원이 부과됩니다.",
-        "error",
+        "error"
       );
       return;
     }

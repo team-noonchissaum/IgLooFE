@@ -210,7 +210,7 @@ export interface ProfileRes {
   status: string;
 }
 
-/** 마이페이지 - GET /api/users/me/mypage → MyPageRes */
+/** 마이페이지 - GET /api/mypage → MyPageRes */
 export interface MyPageRes {
   userId: number;
   email: string;
