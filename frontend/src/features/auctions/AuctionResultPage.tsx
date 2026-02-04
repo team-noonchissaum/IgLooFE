@@ -1,14 +1,18 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/authStore";
 import { auctionApi } from "@/services/auctionApi";
-import { walletApi } from "@/services/walletApi";
+import { bidApi } from "@/services/bidApi";
+import { userApi } from "@/services/userApi";
 import { formatKrw } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useMemo } from "react";
 
 export function AuctionResultPage() {
   const { id } = useParams<{ id: string }>();
   const auctionId = Number(id);
+  const isAuth = useAuthStore((s) => s.isAuthenticated());
 
   const { data: auction, isLoading } = useQuery({
     queryKey: ["auction", auctionId],
@@ -16,10 +20,46 @@ export function AuctionResultPage() {
     enabled: Number.isInteger(auctionId),
   });
 
-  const { data: wallet } = useQuery({
-    queryKey: ["wallet", "me"],
-    queryFn: () => walletApi.getMe(),
+  const { data: bidPage } = useQuery({
+    queryKey: ["bid", auctionId],
+    queryFn: () => bidApi.list(auctionId),
+    enabled: Number.isInteger(auctionId),
   });
+  const bids = bidPage?.content ?? [];
+
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => userApi.getProfile(),
+    enabled: isAuth,
+  });
+
+  // 경매 상태 확인 (auction이 없어도 안전하게 처리)
+  const isSuccess = auction?.status === "SUCCESS";
+  const isFailed = auction?.status === "FAILED";
+  const isEnded = auction?.status === "ENDED";
+
+  // 판매자인지 확인 (bidPage 없이도 확인 가능)
+  const isMyAuction = useMemo(() => {
+    if (!isAuth || !profile || !auction || auction.sellerId == null) return false;
+    return profile.userId === auction.sellerId;
+  }, [isAuth, profile, auction]);
+
+  // 입찰에 참여했는지 확인 (bidPage 필요)
+  const hasParticipated = useMemo(() => {
+    if (!isAuth || !profile || !bidPage || bids.length === 0) return false;
+    return bids.some(bid => bid.bidderNickname === profile.nickname);
+  }, [isAuth, profile, bidPage, bids]);
+
+  // 낙찰자 확인 (bidPage 필요) - SUCCESS 또는 ENDED 상태에서 확인
+  const isWinner = useMemo(() => {
+    if (!isAuth || !profile || !auction || (!isSuccess && !isEnded) || !bidPage || bids.length === 0) {
+      return false;
+    }
+    const highestBid = bids.reduce((max, bid) => 
+      bid.bidPrice > max.bidPrice ? bid : max
+    );
+    return highestBid.bidderNickname === profile.nickname;
+  }, [isAuth, profile, auction, bidPage, bids, isSuccess, isEnded]);
 
   if (isLoading || !auction) {
     return (
@@ -28,9 +68,87 @@ export function AuctionResultPage() {
       </main>
     );
   }
-
-  const isSuccess = auction.status === "SUCCESS";
   const img = auction.imageUrls?.[0];
+
+  // 메시지 결정 로직
+  let message = "경매가 종료되었습니다";
+  let icon = "cancel";
+  
+  // 유찰 상태는 인증 여부와 관계없이 동일하게 표시
+  if (isFailed) {
+    message = "경매가 유찰되었습니다";
+    icon = "cancel";
+  } 
+  // 성공한 경매 또는 종료된 경매인 경우 (ENDED 상태도 성공/실패 판단 가능)
+  else if (isSuccess || isEnded) {
+    // 인증된 사용자이고 프로필이 있는 경우 사용자별 메시지 표시
+    if (isAuth && profile) {
+      // 판매자 확인 (bidPage 없이도 가능)
+      if (isMyAuction) {
+        if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
+          message = "경매가 성공적으로 끝났습니다";
+          icon = "workspace_premium";
+        } else {
+          message = "경매가 종료되었습니다";
+          icon = "cancel";
+        }
+      } 
+      // 입찰 데이터가 로드된 경우 낙찰자/패찰자 확인
+      else if (bidPage && bids.length > 0) {
+        if (isWinner) {
+          message = "경매에 성공하셨습니다";
+          icon = "workspace_premium";
+        } else if (hasParticipated) {
+          message = "아쉽게 경매에 실패하셨습니다";
+          icon = "sentiment_dissatisfied";
+        } else {
+          // 입찰에 참여하지 않은 경우
+          if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
+            message = "경매가 성공적으로 종료되었습니다";
+            icon = "workspace_premium";
+          } else {
+            message = "경매가 종료되었습니다";
+            icon = "cancel";
+          }
+        }
+      }
+      // 입찰 데이터가 아직 없는 경우 (로딩 중이거나 입찰이 없음)
+      else {
+        if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
+          message = "경매가 성공적으로 종료되었습니다";
+          icon = "workspace_premium";
+        } else {
+          message = "경매가 종료되었습니다";
+          icon = "cancel";
+        }
+      }
+    } 
+    // 인증되지 않았거나 프로필이 없는 경우
+    else {
+      if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
+        message = "경매가 성공적으로 종료되었습니다";
+        icon = "workspace_premium";
+      } else {
+        message = "경매가 종료되었습니다";
+        icon = "cancel";
+      }
+    }
+  }
+  
+  // 디버깅용 콘솔 로그 (개발 중에만 사용)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('AuctionResultPage Debug:', {
+      auctionStatus: auction.status,
+      isAuth,
+      hasProfile: !!profile,
+      hasBidPage: !!bidPage,
+      bidsCount: bids.length,
+      isMyAuction,
+      isWinner,
+      hasParticipated,
+      message
+    });
+  }
 
   return (
     <main className="flex flex-col items-center justify-center relative py-12 px-4 min-h-[60vh]">
@@ -38,13 +156,13 @@ export function AuctionResultPage() {
         <div className="bg-primary/10 py-10 flex flex-col items-center">
           <div className="w-20 h-20 bg-primary rounded-full flex items-center justify-center mb-6 shadow-lg shadow-primary/30">
             <span className="material-symbols-outlined text-white text-5xl">
-              workspace_premium
+              {icon}
             </span>
           </div>
           <h1 className="text-text-main tracking-tight text-[32px] font-bold leading-tight px-8 text-center">
-            {isSuccess ? "낙찰을 축하합니다!" : "경매가 종료되었습니다"}
+            {message}
           </h1>
-          {isSuccess && (
+          {isAuth && isSuccess && (isWinner || isMyAuction) && (
             <div className="mt-4 px-6 py-2 bg-primary text-white rounded-full font-bold text-xl shadow-md">
               낙찰가: {formatKrw(auction.currentPrice)}
             </div>
@@ -83,51 +201,24 @@ export function AuctionResultPage() {
               </Link>
             </div>
           </div>
-          {wallet && (
-            <div className="rounded-xl border border-border p-6 bg-white">
-              <div className="flex items-center gap-2 mb-4 text-text-main">
-                <span className="material-symbols-outlined text-primary">
-                  account_balance_wallet
-                </span>
-                <h3 className="font-bold">지갑 요약</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <p className="text-text-muted text-sm">사용 가능 잔액</p>
-                  <p className="text-sm font-medium">
-                    {formatKrw(wallet.balance)}
-                  </p>
-                </div>
-                <div className="h-px bg-border my-2" />
-                <div className="flex justify-between items-center">
-                  <p className="text-text-main font-bold">잔액</p>
-                  <p className="text-primary font-bold">
-                    {formatKrw(wallet.balance)}
-                  </p>
-                </div>
-              </div>
+          {((isSuccess || isEnded) && isWinner) && (
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Link to="/chat" className="flex-1">
+                <Button variant="primary" className="w-full">
+                  <span className="material-symbols-outlined">chat</span>
+                  1:1 채팅
+                </Button>
+              </Link>
+              <Link to="/delivery" className="flex-1">
+                <Button variant="outline" className="w-full">
+                  <span className="material-symbols-outlined">
+                    local_shipping
+                  </span>
+                  배송 정보
+                </Button>
+              </Link>
             </div>
           )}
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* 1:1 채팅 미구현 */}
-            <Button
-              variant="secondary"
-              className="flex-1 cursor-not-allowed opacity-60"
-              disabled
-              title="1:1 채팅 준비 중"
-            >
-              <span className="material-symbols-outlined">chat</span>
-              1:1 채팅
-            </Button>
-            <Link to="/delivery" className="flex-1">
-              <Button variant="outline" className="w-full">
-                <span className="material-symbols-outlined">
-                  local_shipping
-                </span>
-                배송 정보
-              </Button>
-            </Link>
-          </div>
           <div className="text-center">
             <Link
               to="/me"

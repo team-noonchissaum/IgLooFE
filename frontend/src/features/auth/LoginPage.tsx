@@ -21,7 +21,7 @@ type FormData = z.infer<typeof schema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/me";
+  const redirect = searchParams.get("redirect") ?? "/";
   const addToast = useToastStore((s) => s.add);
   const setTokens = useAuthStore((s) => s.setTokens);
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -31,7 +31,7 @@ export function LoginPage() {
     if (
       !hasShownRedirectToast.current &&
       redirect &&
-      redirect !== "/me" &&
+      redirect !== "/" &&
       redirect.startsWith("/")
     ) {
       hasShownRedirectToast.current = true;
@@ -58,7 +58,7 @@ export function LoginPage() {
     onSuccess: (res) => {
       setTokens(res.data.accessToken, res.data.refreshToken, res.data.role);
       addToast("로그인되었습니다.", "success");
-      navigate(redirect.startsWith("/") ? redirect : "/me", { replace: true });
+      navigate(redirect.startsWith("/") ? redirect : "/", { replace: true });
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -85,7 +85,7 @@ export function LoginPage() {
             loginRes.data.refreshToken,
             loginRes.data.role
           );
-          navigate(redirect.startsWith("/") ? redirect : "/me", { replace: true });
+          navigate(redirect.startsWith("/") ? redirect : "/", { replace: true });
         })
         .catch((err) => addToast(getApiErrorMessage(err), "error"));
     },

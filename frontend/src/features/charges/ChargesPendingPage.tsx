@@ -7,6 +7,7 @@ import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { MeSidebar } from "@/components/layout/MeSidebar";
 import type { ChargeCheckRes } from "@/lib/types";
 
 export function ChargesPendingPage() {
@@ -91,27 +92,18 @@ export function ChargesPendingPage() {
 
   return (
     <main className="max-w-[1000px] mx-auto px-6 py-8">
-      <nav className="flex flex-wrap gap-2 mb-6 text-sm">
-        <Link to="/" className="text-text-muted hover:text-primary">
-          홈
-        </Link>
-        <span className="text-text-muted">/</span>
-        <Link to="/me" className="text-text-muted hover:text-primary">
-          마이페이지
-        </Link>
-        <span className="text-text-muted">/</span>
-        <span className="text-text-main font-medium">충전대기 목록</span>
-      </nav>
-
-      <div className="flex flex-col gap-2 mb-8">
-        <h1 className="text-3xl md:text-4xl font-black leading-tight text-text-main">
-          충전대기 목록
-        </h1>
-        <p className="text-text-muted">
-          결제 완료 후 아직 지갑에 반영되지 않은 충전 내역입니다. 승인하면
-          지갑에 반영되며, 환불 시 결제가 취소됩니다.
-        </p>
-      </div>
+      <div className="flex flex-col md:flex-row gap-8">
+        <MeSidebar />
+        <section className="flex-1">
+          <div className="flex flex-col gap-2 mb-8">
+            <h1 className="text-3xl md:text-4xl font-black leading-tight text-text-main">
+              충전대기 목록
+            </h1>
+            <p className="text-text-muted">
+              결제 완료 후 아직 지갑에 반영되지 않은 충전 내역입니다. 승인하면
+              지갑에 반영되며, 환불 시 결제가 취소됩니다.
+            </p>
+          </div>
 
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
         {isLoading ? (
@@ -210,6 +202,8 @@ export function ChargesPendingPage() {
         >
           크레딧 충전
         </Link>
+      </div>
+        </section>
       </div>
     </main>
   );

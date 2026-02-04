@@ -1,15 +1,16 @@
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/authStore";
+import { userApi } from "@/services/userApi";
+import { imageApi } from "@/services/imageApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { useRef, useState } from "react";
-import { useAuthStore } from "@/stores/authStore";
-import { userApi } from "@/services/userApi";
-import { imageApi } from "@/services/imageApi";
+import { MeSidebar } from "@/components/layout/MeSidebar";
 
 const schema = z.object({
   nickname: z.string().min(1, "닉네임을 입력하세요"),
@@ -73,9 +74,12 @@ export function MeEditPage() {
   });
 
   return (
-    <main className="max-w-[800px] mx-auto px-6 py-8">
-      <h1 className="text-2xl font-bold text-text-main mb-6">프로필 수정</h1>
-      <form
+    <main className="max-w-[1000px] mx-auto px-6 py-8">
+      <div className="flex flex-col md:flex-row gap-8">
+        <MeSidebar />
+        <section className="flex-1">
+          <h1 className="text-2xl font-bold text-text-main mb-6">프로필 수정</h1>
+          <form
         onSubmit={handleSubmit((data) => updateProfile.mutate(data))}
         className="space-y-6 bg-white rounded-xl border border-border p-6 shadow-sm"
       >
@@ -169,6 +173,8 @@ export function MeEditPage() {
           </Button>
         </div>
       </Modal>
+        </section>
+      </div>
     </main>
   );
 }

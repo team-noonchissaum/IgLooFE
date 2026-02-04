@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
@@ -6,7 +7,7 @@ import { userApi } from "@/services/userApi";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 /** 로그인 필요: 미인증 시 / 로 이동 */
-export function RequireAuth({ children }: { children: React.ReactNode }) {
+export function RequireAuth({ children }: { children: ReactNode }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const location = useLocation();
   if (!isAuth) {
@@ -16,7 +17,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 /** ADMIN 역할 필요: 미인증 시 / 로, 일반 유저 시 /me 로 이동 */
-export function RequireAdmin({ children }: { children: React.ReactNode }) {
+export function RequireAdmin({ children }: { children: ReactNode }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const role = useAuthStore((s) => s.role);
   const setRole = useAuthStore((s) => s.setRole);
@@ -53,7 +54,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
 }
 
 /** 게스트 전용: 인증 시 /me 로 이동 */
-export function GuestOnly({ children }: { children: React.ReactNode }) {
+export function GuestOnly({ children }: { children: ReactNode }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   if (isAuth) {
     return <Navigate to="/me" replace />;
