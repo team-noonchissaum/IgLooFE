@@ -56,7 +56,7 @@ export function LoginPage() {
         password: data.password,
       }),
     onSuccess: (res) => {
-      setTokens(res.data.accessToken, res.data.refreshToken);
+      setTokens(res.data.accessToken, res.data.refreshToken, res.data.role);
       addToast("로그인되었습니다.", "success");
       navigate(redirect.startsWith("/") ? redirect : "/me", { replace: true });
     },
@@ -80,7 +80,11 @@ export function LoginPage() {
           password: variables.password,
         })
         .then((loginRes) => {
-          setTokens(loginRes.data.accessToken, loginRes.data.refreshToken);
+          setTokens(
+            loginRes.data.accessToken,
+            loginRes.data.refreshToken,
+            loginRes.data.role
+          );
           navigate(redirect.startsWith("/") ? redirect : "/me", { replace: true });
         })
         .catch((err) => addToast(getApiErrorMessage(err), "error"));

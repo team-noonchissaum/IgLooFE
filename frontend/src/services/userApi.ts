@@ -8,7 +8,7 @@ import type {
   AuctionRes,
 } from "@/lib/types";
 
-/** 유저 - GET /api/users/me, me/mypage, PATCH /api/users/me, DELETE /api/users/me */
+/** 유저 - GET /api/users/me, PATCH /api/users/me. 마이페이지 - GET /api/mypage */
 export const userApi = {
   getProfile: () =>
     api

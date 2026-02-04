@@ -77,7 +77,7 @@ export function MePage() {
             </Link>
             <Link
               to="/wallet"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary-light text-primary font-semibold transition-colors"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 text-text-main font-medium transition-colors"
             >
               <span className="material-symbols-outlined fill-icon">
                 account_balance_wallet
