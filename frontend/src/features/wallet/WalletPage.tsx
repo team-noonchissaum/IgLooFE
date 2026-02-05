@@ -118,7 +118,7 @@ export function WalletPage() {
                 <div className="flex flex-col gap-2 rounded-xl p-6 bg-white border border-border shadow-sm">
                   <div className="flex items-center justify-between">
                     <p className="text-text-muted text-sm font-semibold uppercase tracking-wider">
-                      출금 대기 (락)
+                      홀딩된 잔액
                     </p>
                   </div>
                   <p className="text-text-main text-3xl font-bold leading-tight">
@@ -194,30 +194,6 @@ export function WalletPage() {
               </p>
             </div>
 
-            {withdrawals.length > 0 && (
-              <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
-                <h2 className="text-lg font-bold text-text-main mb-4">
-                  내 출금 요청
-                </h2>
-                <ul className="divide-y divide-border">
-                  {withdrawals.map((w) => (
-                    <li
-                      key={w.withdrawalId}
-                      className="py-3 flex justify-between items-center"
-                    >
-                      <span>
-                        {formatKrw(w.amount)} (수수료 {formatKrw(w.feeAmount)}) -{" "}
-                        {w.status}
-                      </span>
-                      <span className="text-sm text-text-muted">
-                        {formatDateTime(w.createdAt)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             <div className="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
               <h2 className="text-lg font-bold text-text-main p-4 border-b border-border">
                 거래 내역
@@ -229,7 +205,9 @@ export function WalletPage() {
                     className="p-4 flex justify-between items-center"
                   >
                     <div>
-                      <p className="font-medium text-text-main">{tx.type}</p>
+                      <p className="font-medium text-text-main">
+                        {tx.memo ?? tx.type}
+                      </p>
                       <p className="text-sm text-text-muted">
                         {formatDateTime(tx.created_at)}
                       </p>

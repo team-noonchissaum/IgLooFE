@@ -37,7 +37,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-[var(--surface)]/90 backdrop-blur-lg border-b border-border h-[72px] flex items-center">
+    <header className="sticky top-0 z-50 w-full bg-[color:var(--surface)]/90 backdrop-blur-lg border-b border-border h-[72px] flex items-center">
       <div className="max-w-[1200px] mx-auto w-full px-6 flex items-center justify-between gap-8">
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <div className="w-10 h-10 flex items-center justify-center bg-primary rounded-xl text-white shadow-lg shadow-blue-100 dark:shadow-blue-900/30">
@@ -58,14 +58,14 @@ export function Header() {
             <>
               <Link
                 to="/me/wishes"
-                className="p-2.5 rounded-xl hover:bg-[#f8f9fa] dark:hover:bg-gray-800 text-[#495057] dark:text-text-main transition-colors"
+                className="p-2.5 rounded-xl hover:bg-[#f8f9fa] dark:hover:bg-gray-800 text-text-main transition-colors"
                 title="찜 목록"
               >
                 <span className="material-symbols-outlined">favorite</span>
               </Link>
               <Link
                 to="/notifications"
-                className="p-2.5 rounded-xl hover:bg-[#f8f9fa] dark:hover:bg-gray-800 text-[#495057] dark:text-text-main relative transition-colors"
+                className="p-2.5 rounded-xl hover:bg-[#f8f9fa] dark:hover:bg-gray-800 text-text-main relative transition-colors"
                 title="알림"
               >
                 <span className="material-symbols-outlined">notifications</span>
@@ -77,6 +77,7 @@ export function Header() {
               <div className="relative group">
                 <button
                   type="button"
+                  onClick={() => navigate("/me")}
                   className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full border border-border hover:bg-[#f8f9fa] dark:hover:bg-gray-800 transition-all"
                   aria-expanded="false"
                   aria-haspopup="true"

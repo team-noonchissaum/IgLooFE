@@ -140,7 +140,7 @@ export function CategorySidebar() {
                       onClick={() => toggleRoot(root.id)}
                       className={`p-2 rounded-lg transition-colors ${
                         isSelected
-                          ? "text-white hover:bg-primary/80"
+                          ? "text-primary hover:bg-primary/10"
                           : "text-text-muted hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                       aria-label={isExpanded ? "접기" : "펼치기"}

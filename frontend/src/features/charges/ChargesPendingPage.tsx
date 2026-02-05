@@ -196,12 +196,6 @@ export function ChargesPendingPage() {
           <span className="material-symbols-outlined text-lg">arrow_back</span>
           마이페이지로
         </Link>
-        <Link
-          to="/credits/charge"
-          className="text-primary font-semibold hover:underline flex items-center gap-1"
-        >
-          크레딧 충전
-        </Link>
       </div>
         </section>
       </div>

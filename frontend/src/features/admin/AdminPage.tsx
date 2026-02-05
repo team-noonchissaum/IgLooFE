@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, unwrapData } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { PageResponse, AuctionRes } from "@/lib/types";
+import { formatDateTime, formatKrw } from "@/lib/format";
+import type { PageResponse, AuctionRes, WithdrawalRes } from "@/lib/types";
 
 interface ReportItem {
   reportId: number;
@@ -67,13 +68,20 @@ interface StatisticsData {
 export function AdminPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<
-    "reports" | "users" | "auctions" | "blockedAuctions" | "blockedUsers" | "stats"
+    | "reports"
+    | "users"
+    | "auctions"
+    | "blockedAuctions"
+    | "blockedUsers"
+    | "withdrawals"
+    | "stats"
   >("reports");
   const [reportPage, setReportPage] = useState(0);
   const [userPage, setUserPage] = useState(0);
   const [auctionPage, setAuctionPage] = useState(0);
   const [blockedPage, setBlockedPage] = useState(0);
   const [blockedUsersPage, setBlockedUsersPage] = useState(0);
+  const [withdrawalPage, setWithdrawalPage] = useState(0);
   const [statsDate, setStatsDate] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
@@ -165,6 +173,18 @@ export function AdminPage() {
     enabled: activeTab === "stats",
   });
 
+  const { data: withdrawalsPage, isLoading: withdrawalsLoading } = useQuery({
+    queryKey: ["admin", "withdrawals", withdrawalPage],
+    queryFn: () =>
+      api
+        .get<{ message: string; data: PageResponse<WithdrawalRes> }>(
+          "/api/withdrawals/requested",
+          { params: { page: withdrawalPage, size: 10 } }
+        )
+        .then(unwrapData),
+    enabled: activeTab === "withdrawals",
+  });
+
   const blockUser = useMutation({
     mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
       api.patch(`/api/admin/users/${userId}/block`, { reason }),
@@ -202,6 +222,7 @@ export function AdminPage() {
   );
   const blockedAuctions = blockedPageData?.content ?? [];
   const blockedUsers = blockedUsersPageData?.content ?? [];
+  const withdrawals = withdrawalsPage?.content ?? [];
 
   const blockAuction = useMutation({
     mutationFn: ({ auctionId, reason }: { auctionId: number; reason: string }) =>
@@ -222,6 +243,20 @@ export function AdminPage() {
       api.patch(`/api/admin/auctions/${auctionId}/restore`),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["admin", "auctions", "blocked"] }),
+  });
+
+  const confirmWithdrawal = useMutation({
+    mutationFn: (withdrawalId: number) =>
+      api.post(`/api/withdrawals/${withdrawalId}/confirm`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", "withdrawals"] }),
+  });
+
+  const rejectWithdrawal = useMutation({
+    mutationFn: (withdrawalId: number) =>
+      api.post(`/api/withdrawals/${withdrawalId}/reject`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", "withdrawals"] }),
   });
 
   return (
@@ -291,6 +326,18 @@ export function AdminPage() {
           >
             <span className="material-symbols-outlined">person_off</span>
             차단된 유저
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("withdrawals")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left w-full ${
+              activeTab === "withdrawals"
+                ? "bg-primary text-white font-semibold"
+                : "text-text-muted hover:bg-gray-200"
+            }`}
+          >
+            <span className="material-symbols-outlined">payments</span>
+            출금 승인/반려
           </button>
           <button
             type="button"
@@ -647,6 +694,86 @@ export function AdminPage() {
                       onClick={() =>
                         setBlockedUsersPage((p) => p + 1)
                       }
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      더 보기
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === "withdrawals" && (
+          <div>
+            <h1 className="text-2xl font-bold text-text-main mb-6">
+              출금 승인/반려
+            </h1>
+            {withdrawalsLoading ? (
+              <Skeleton className="h-64 w-full rounded-xl" />
+            ) : (
+              <div className="bg-white rounded-xl border border-border overflow-hidden">
+                <ul className="divide-y divide-border">
+                  {withdrawals.map((w) => {
+                    const total = w.amount + w.feeAmount;
+                    return (
+                      <li
+                        key={w.withdrawalId}
+                        className="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            출금 #{w.withdrawalId} · {formatKrw(w.amount)}
+                          </p>
+                          <p className="text-sm text-text-muted">
+                            수수료 {formatKrw(w.feeAmount)} · 합계{" "}
+                            {formatKrw(total)}
+                          </p>
+                          <p className="text-xs text-text-muted mt-1">
+                            신청일 {formatDateTime(w.createdAt)} · 상태 {w.status}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              confirmWithdrawal.mutate(w.withdrawalId)
+                            }
+                            loading={
+                              confirmWithdrawal.isPending &&
+                              confirmWithdrawal.variables === w.withdrawalId
+                            }
+                          >
+                            승인
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() =>
+                              rejectWithdrawal.mutate(w.withdrawalId)
+                            }
+                            loading={
+                              rejectWithdrawal.isPending &&
+                              rejectWithdrawal.variables === w.withdrawalId
+                            }
+                          >
+                            반려
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {withdrawals.length === 0 && (
+                  <p className="p-8 text-center text-text-muted">
+                    승인 대기 출금이 없습니다.
+                  </p>
+                )}
+                {withdrawalsPage && !withdrawalsPage.last && (
+                  <div className="p-4 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setWithdrawalPage((p) => p + 1)}
                       className="text-primary font-semibold hover:underline"
                     >
                       더 보기

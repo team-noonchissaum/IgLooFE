@@ -53,6 +53,17 @@ export function MeSidebar() {
       </div>
       <nav className="flex flex-col gap-1">
         <Link
+          to="/me"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+            isActive("/me")
+              ? "bg-primary text-white font-semibold"
+              : "hover:bg-gray-100 text-text-main font-medium"
+          }`}
+        >
+          <span className="material-symbols-outlined">account_circle</span>
+          내 정보
+        </Link>
+        <Link
           to="/me/edit"
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
             isActive("/me/edit")

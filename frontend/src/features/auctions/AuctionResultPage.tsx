@@ -135,21 +135,6 @@ export function AuctionResultPage() {
     }
   }
   
-  // 디버깅용 콘솔 로그 (개발 중에만 사용)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('AuctionResultPage Debug:', {
-      auctionStatus: auction.status,
-      isAuth,
-      hasProfile: !!profile,
-      hasBidPage: !!bidPage,
-      bidsCount: bids.length,
-      isMyAuction,
-      isWinner,
-      hasParticipated,
-      message
-    });
-  }
-
   return (
     <main className="flex flex-col items-center justify-center relative py-12 px-4 min-h-[60vh]">
       <div className="max-w-[640px] w-full bg-white shadow-2xl rounded-xl overflow-hidden border border-border">
