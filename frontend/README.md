@@ -1,6 +1,7 @@
 # Igloo Frontend
 
 Vite + React + TypeScript + Tailwind 기반 경매 프론트엔드. 백엔드(Spring Boot, JWT, OAuth2, STOMP WebSocket)와 연동합니다.
+TanStack Query/React Router/Zustand로 상태·라우팅·데이터를 관리하며, STOMP(SockJS)로 실시간 경매를 처리합니다.
 
 ## 실행 방법
 
@@ -22,7 +23,7 @@ npm run preview
 
 ## 환경 변수
 
-프로젝트 루트에 `.env` 파일을 만들고 아래 변수를 설정하세요.
+`frontend` 폴더에 `.env` 파일을 만들고 아래 변수를 설정하세요.
 
 | 변수                | 설명                                          | 예시                    |
 | ------------------- | --------------------------------------------- | ----------------------- |
@@ -37,7 +38,7 @@ npm run preview
 | ------------------------------------------ | -------- | ------------------------------------------------------ |
 | 메인: 경매 목록/페이징/카테고리/검색/정렬  | 구현     | GET /api/auctions, /api/auctions/search                |
 | 메인: 찜(카드)                             | 구현     | POST /api/item/{itemId}/wish (itemId 있을 때)          |
-| 메인: 알림 뱃지/지갑 요약                  | 구현     | unread-count, GET /api/wallets/me                      |
+| 메인: 알림 뱃지                            | 구현     | unread-count                                           |
 | 메인: 위치/근처/조회수                     | 미구현   | 백엔드 미지원                                          |
 | 제품상세: 상세/입찰내역/입찰하기/실시간 WS | 구현     | requestId(UUID) 필수, WS /topic/auction/{id}, snapshot |
 | 제품상세: 찜 토글                          | 부분구현 | 상세 DTO에 itemId 없으면 호출 안 함                    |
@@ -109,7 +110,8 @@ src/
 
 - Vite, React 18, TypeScript
 - Tailwind CSS
-- React Router, TanStack Query, Zustand
+- React Router v6, TanStack Query, Zustand
 - Axios, react-hook-form, zod, @hookform/resolvers
 - @stomp/stompjs, sockjs-client (실시간)
+- Toss Payments SDK
 - dayjs, Intl.NumberFormat (날짜/KRW)

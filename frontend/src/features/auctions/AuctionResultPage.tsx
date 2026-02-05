@@ -186,7 +186,7 @@ export function AuctionResultPage() {
               </Link>
             </div>
           </div>
-          {((isSuccess || isEnded) && isWinner) && (
+          {((isSuccess || isEnded) && (isWinner || isMyAuction)) && (
             <div className="flex flex-col sm:flex-row gap-4">
               <Link to="/chat" className="flex-1">
                 <Button variant="primary" className="w-full">
@@ -204,7 +204,14 @@ export function AuctionResultPage() {
               </Link>
             </div>
           )}
-          <div className="text-center">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to={`/auctions/${auctionId}`}
+              className="text-text-muted hover:text-primary text-sm font-medium transition-colors"
+            >
+              경매 상세로
+            </Link>
+            <span className="text-text-muted">·</span>
             <Link
               to="/me"
               className="text-text-muted hover:text-primary text-sm font-medium transition-colors"

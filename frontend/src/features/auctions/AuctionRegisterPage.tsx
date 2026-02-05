@@ -416,13 +416,15 @@ export function AuctionRegisterPage() {
                 </h3>
               </div>
               <div className="p-6 space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-muted">등록 수수료</span>
-                  <span className="font-semibold">0원</span>
-                </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex flex-col gap-1 text-sm">
                   <span className="text-text-muted">보증금</span>
-                  <span className="font-semibold">서버 정책에 따름</span>
+                  <div className="font-semibold leading-relaxed">
+                    <p>시작가 1만원 이하: 1,000원</p>
+                    <p>시작가 1만원 초과: 시작가의 10% (올림)</p>
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    등록 후 5분 이내 취소 전액 환불, 이후 취소 시 몰수
+                  </p>
                 </div>
                 <div className="pt-4 border-t border-border flex justify-between items-center">
                   <span className="font-bold text-text-main">등록 시 차감</span>
