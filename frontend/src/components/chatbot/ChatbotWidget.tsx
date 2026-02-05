@@ -58,14 +58,29 @@ export function ChatbotWidget() {
       } else if (data.type === "ACTION") {
         setCurrentNode(null);
         setAction(data.action ?? null);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `bot-action-${Date.now()}`,
-            text: "요청을 처리할 수 있는 안내 링크가 있어요.",
-            from: "bot",
-          },
-        ]);
+        // actionTarget이 있는 경우에만 링크 메시지 표시
+        if (data.action?.actionTarget) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `bot-action-${Date.now()}`,
+              text: "요청을 처리할 수 있는 안내 링크가 있어요.",
+              from: "bot",
+            },
+          ]);
+        } else {
+          // actionTarget이 없는 경우 (예: 결제 상태 확인 등)
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `bot-action-${Date.now()}`,
+              text: data.action?.actionType === "API" 
+                ? "요청을 처리했습니다." 
+                : "안내가 완료되었습니다.",
+              from: "bot",
+            },
+          ]);
+        }
       }
     },
   });
@@ -89,22 +104,61 @@ export function ChatbotWidget() {
     nextNode.mutate({ nodeId: currentNode.nodeId, optionId });
   };
 
+  // 백엔드 경로를 프론트엔드 경로로 매핑
+  const mapBackendPathToFrontend = (backendPath: string): string => {
+    const pathMap: Record<string, string> = {
+      "/auctions/register": "/auctions/new",
+      "/auction/register": "/auctions/new",
+      "/auction/registration": "/auctions/new",
+      "/credits/charge": "/credits/charge",
+      "/credit/charge": "/credits/charge",
+      "/payment": "/payments/result",
+      "/payments": "/payments/result",
+      "/charges": "/me/charges",
+      "/charge": "/me/charges",
+      "/wallet": "/wallet",
+      "/mypage": "/me",
+      "/my": "/me",
+      "/me": "/me",
+    };
+
+    // 정확한 매칭
+    if (pathMap[backendPath]) {
+      return pathMap[backendPath];
+    }
+
+    // 경로 시작 부분 매칭
+    for (const [backend, frontend] of Object.entries(pathMap)) {
+      if (backendPath.startsWith(backend)) {
+        return frontend;
+      }
+    }
+
+    return backendPath;
+  };
+
   const actionLink = useMemo(() => {
     if (!action || action.actionType !== "LINK") return null;
     const target = action.actionTarget;
     if (!target) return null;
     
     // 상대 경로를 절대 경로로 변환 (앞에 /가 없으면 추가)
-    const normalizedTarget = target.startsWith("/") ? target : `/${target}`;
+    let normalizedTarget = target.startsWith("/") ? target : `/${target}`;
+    
+    // 백엔드 경로를 프론트엔드 경로로 매핑
+    normalizedTarget = mapBackendPathToFrontend(normalizedTarget);
     
     // 로그인된 상태에서 로그인 페이지로 가는 링크는 표시하지 않음
     if (isAuth && (normalizedTarget === "/login" || normalizedTarget === "/login/")) {
       return null;
     }
     
+    // 외부 링크인지 확인 (매핑 전 원본 경로로 확인)
+    const isExternal = /^https?:\/\//i.test(target);
+    
     return {
       target: normalizedTarget,
-      external: /^https?:\/\//i.test(target),
+      external: isExternal,
     };
   }, [action, isAuth]);
 
