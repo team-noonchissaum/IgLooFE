@@ -53,10 +53,42 @@ export function useAuctionWebSocket(
         client.subscribe(`/topic/auction/${auctionId}`, (frame) => {
           try {
             const body = JSON.parse(frame.body) as
-              | AuctionWsMessage
+              | (AuctionWsMessage & { payload?: Record<string, unknown> })
               | AuctionSnapshot;
             if (body && typeof body === "object" && "type" in body) {
-              onMessageRef.current?.(body as AuctionWsMessage);
+              const msg = body as AuctionWsMessage & {
+                payload?: {
+                  currentPrice?: number;
+                  bidCount?: number;
+                  endAt?: string;
+                };
+              };
+              onMessageRef.current?.(msg);
+              // 입찰 성공/연장 시 payload로 스냅샷 갱신 → 모든 시청자 화면에 최고가 즉시 반영
+              if (msg.type === "BID_SUCCESSED" && msg.payload) {
+                const p = msg.payload as {
+                  currentPrice?: number;
+                  bidCount?: number;
+                  endAt?: string;
+                };
+                const patch: AuctionSnapshot = {};
+                if (p.currentPrice != null) patch.currentPrice = p.currentPrice;
+                if (p.bidCount != null) patch.bidCount = p.bidCount;
+                if (p.endAt != null) patch.endAt = String(p.endAt);
+                if (Object.keys(patch).length > 0) onSnapshotRef.current(patch);
+              }
+              if (msg.type === "AUCTION_EXTENDED" && msg.payload) {
+                const p = msg.payload as { endAt?: string };
+                onSnapshotRef.current({
+                  endAt: p.endAt != null ? String(p.endAt) : undefined,
+                });
+              }
+              if (msg.type === "AUCTION_ENDED" && msg.payload) {
+                onSnapshotRef.current({
+                  status: "ENDED",
+                  ...(msg.payload as Record<string, unknown>),
+                } as AuctionSnapshot);
+              }
             } else {
               onSnapshotRef.current(body as AuctionSnapshot);
             }

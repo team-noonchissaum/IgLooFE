@@ -4,9 +4,11 @@ import type {
   MyPageRes,
   ProfileUpdateUserReq,
   ProfileUpdateUserRes,
+  PageResponse,
+  AuctionRes,
 } from "@/lib/types";
 
-/** 유저 - GET /api/users/me, me/mypage, PATCH /api/users/me, DELETE /api/users/me */
+/** 유저 - GET /api/users/me, PATCH /api/users/me. 마이페이지 - GET /api/mypage */
 export const userApi = {
   getProfile: () =>
     api
@@ -14,8 +16,14 @@ export const userApi = {
       .then(unwrapData),
 
   getMypage: () =>
+    api.get<{ message: string; data: MyPageRes }>("/api/mypage").then(unwrapData),
+
+  getMyAuctions: (params?: { page?: number; size?: number }) =>
     api
-      .get<{ message: string; data: MyPageRes }>("/api/users/me/mypage")
+      .get<{ message: string; data: PageResponse<AuctionRes> }>(
+        "/api/mypage/auctions",
+        { params: { page: params?.page ?? 0, size: params?.size ?? 10 } }
+      )
       .then(unwrapData),
 
   updateProfile: (body: ProfileUpdateUserReq) =>
@@ -27,5 +35,5 @@ export const userApi = {
       .then(unwrapData),
 
   deleteUser: () =>
-    api.delete<{ message: string; data: null }>("/api/users/me"),
+    api.delete<{ message: string; data: null }>("/api/users/me/force"),
 };

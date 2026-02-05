@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
-import { RequireAuth } from "@/routes/guards";
-
+import { RequireAuth, RequireAdmin } from "@/routes/guards";
 import { HomePage } from "@/features/home/HomePage";
 import { AuctionDetailPage } from "@/features/auctions/AuctionDetailPage";
 import { AuctionRegisterPage } from "@/features/auctions/AuctionRegisterPage";
@@ -13,6 +12,7 @@ import { WalletPage } from "@/features/wallet/WalletPage";
 import { NotificationsPage } from "@/features/notifications/NotificationsPage";
 import { MePage } from "@/features/me/MePage";
 import { MeEditPage } from "@/features/me/MeEditPage";
+import { MeWishesPage } from "@/features/me/MeWishesPage";
 import { ChargesPendingPage } from "@/features/charges/ChargesPendingPage";
 import { DeliveryPage } from "@/features/delivery/DeliveryPage";
 import { AdminPage } from "@/features/admin/AdminPage";
@@ -79,6 +79,14 @@ function App() {
             }
           />
           <Route
+            path="me/wishes"
+            element={
+              <RequireAuth>
+                <MeWishesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="me/charges"
             element={
               <RequireAuth>
@@ -97,9 +105,9 @@ function App() {
           <Route
             path="admin"
             element={
-              <RequireAuth>
+              <RequireAdmin>
                 <AdminPage />
-              </RequireAuth>
+              </RequireAdmin>
             }
           />
           <Route

@@ -43,6 +43,7 @@ export interface AuctionListRes {
 /** 경매 상세 - GET /api/auctions/{id} → AuctionRes */
 export interface AuctionRes {
   auctionId: number;
+  itemId?: number;
   title: string;
   description: string;
   currentPrice: number;
@@ -51,6 +52,7 @@ export interface AuctionRes {
   status: AuctionStatus;
   startAt: string;
   endAt: string;
+  sellerId?: number;
   sellerNickname: string;
   imageUrls: string[];
   categoryId: number;
@@ -66,7 +68,8 @@ export type AuctionStatus =
   | "ENDED"
   | "SUCCESS"
   | "FAILED"
-  | "CANCELED";
+  | "CANCELED"
+  | "BLOCKED";
 
 /** 경매 등록 요청 - POST /api/auctions (AuctionRegisterReq) */
 export interface AuctionRegisterReq {
@@ -165,6 +168,50 @@ export interface PaymentConfirmRes {
   chargeCheckId?: number | null;
 }
 
+/** 챗봇 시나리오 요약 */
+export interface ChatScenarioSummaryRes {
+  scenarioId: number;
+  title: string;
+  description: string;
+}
+
+/** 챗봇 선택 옵션 */
+export interface ChatOptionRes {
+  optionId: number;
+  label: string;
+  nextNodeId: number | null;
+  actionType: "NONE" | "LINK" | "API";
+  actionTarget: string | null;
+}
+
+/** 챗봇 노드 */
+export interface ChatNodeRes {
+  nodeId: number;
+  scenarioId: number;
+  text: string;
+  terminal: boolean;
+  options: ChatOptionRes[];
+}
+
+/** 챗봇 액션 */
+export interface ChatActionRes {
+  actionType: "NONE" | "LINK" | "API";
+  actionTarget: string | null;
+}
+
+/** 챗봇 다음 노드 응답 */
+export interface ChatNextRes {
+  type: "NODE" | "ACTION";
+  node: ChatNodeRes | null;
+  action: ChatActionRes | null;
+}
+
+/** 챗봇 다음 노드 요청 */
+export interface ChatNextReq {
+  nodeId: number;
+  optionId: number;
+}
+
 /** 가상계좌 정보 (결제 승인 시) */
 export interface VirtualAccountInfo {
   bank: string;
@@ -210,7 +257,7 @@ export interface ProfileRes {
   status: string;
 }
 
-/** 마이페이지 - GET /api/users/me/mypage → MyPageRes */
+/** 마이페이지 - GET /api/mypage → MyPageRes */
 export interface MyPageRes {
   userId: number;
   email: string;
@@ -246,6 +293,7 @@ export interface WishToggleRes {
 /** 찜 목록 항목 - GET /api/item/wish → WishItemRes[] */
 export interface WishItemRes {
   itemId: number;
+  auctionId: number | null;
   title: string;
   startPrice: number;
   sellerName: string;

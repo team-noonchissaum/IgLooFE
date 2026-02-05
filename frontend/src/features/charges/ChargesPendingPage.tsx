@@ -7,6 +7,7 @@ import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { MeSidebar } from "@/components/layout/MeSidebar";
 import type { ChargeCheckRes } from "@/lib/types";
 
 export function ChargesPendingPage() {
@@ -17,6 +18,10 @@ export function ChargesPendingPage() {
   const addToast = useToastStore((s) => s.add);
   const [page] = useState(0);
   const size = 10;
+  const [refundTargetId, setRefundTargetId] = useState<number | null>(null);
+  const [refundReasonMap, setRefundReasonMap] = useState<Map<number, string>>(
+    new Map()
+  );
 
   const { data: list = [], isLoading } = useQuery({
     queryKey: ["charges", "unchecked", page, size],
@@ -36,12 +41,32 @@ export function ChargesPendingPage() {
   const cancelMutation = useMutation({
     mutationFn: ({ id, reason }: { id: number; reason: string }) =>
       chargeApi.cancel(id, reason),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       addToast("환불 요청이 처리되었습니다.", "success");
       queryClient.invalidateQueries({ queryKey: ["charges", "unchecked"] });
       queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      setRefundTargetId(null);
+      setRefundReasonMap((prev) => {
+        const next = new Map(prev);
+        if (variables?.id != null) next.delete(variables.id);
+        return next;
+      });
     },
-    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+    onError: (err) => {
+      const msg = getApiErrorMessage(err);
+      const isTossRelated =
+        /토스|toss|취소|cancel|payment|결제/i.test(msg) ||
+        (typeof err === "object" &&
+          err !== null &&
+          "response" in err &&
+          (err as { response?: { status?: number } }).response?.status === 400);
+      addToast(
+        isTossRelated
+          ? "환불 처리에 실패했습니다. 이미 처리된 결제이거나 토스페이먼츠 상태를 확인해 주세요."
+          : msg,
+        "error"
+      );
+    },
   });
 
   // 결제 완료 후 이동한 경우: 상단(방금 결제된 항목)으로 스크롤 + URL에서 from 제거
@@ -64,40 +89,28 @@ export function ChargesPendingPage() {
   }, [fromResult, isLoading, list.length, setSearchParams]);
 
   const handleRefund = (item: ChargeCheckRes) => {
-    const reason = window.prompt(
-      "환불 사유를 입력하세요 (선택)",
-      "사용자 요청"
-    );
-    if (reason === null) return;
-    cancelMutation.mutate({
-      id: item.chargeCheckId,
-      reason: reason || "사용자 요청",
-    });
+    setRefundTargetId(item.chargeCheckId);
+  };
+
+  const handleRefundSubmit = (id: number) => {
+    const reason = refundReasonMap.get(id)?.trim() || "사용자 요청";
+    cancelMutation.mutate({ id, reason });
   };
 
   return (
     <main className="max-w-[1000px] mx-auto px-6 py-8">
-      <nav className="flex flex-wrap gap-2 mb-6 text-sm">
-        <Link to="/" className="text-text-muted hover:text-primary">
-          홈
-        </Link>
-        <span className="text-text-muted">/</span>
-        <Link to="/me" className="text-text-muted hover:text-primary">
-          마이페이지
-        </Link>
-        <span className="text-text-muted">/</span>
-        <span className="text-text-main font-medium">충전대기 목록</span>
-      </nav>
-
-      <div className="flex flex-col gap-2 mb-8">
-        <h1 className="text-3xl md:text-4xl font-black leading-tight text-text-main">
-          충전대기 목록
-        </h1>
-        <p className="text-text-muted">
-          결제 완료 후 아직 지갑에 반영되지 않은 충전 내역입니다. 승인하면
-          지갑에 반영되며, 환불 시 결제가 취소됩니다.
-        </p>
-      </div>
+      <div className="flex flex-col md:flex-row gap-8">
+        <MeSidebar />
+        <section className="flex-1">
+          <div className="flex flex-col gap-2 mb-8">
+            <h1 className="text-3xl md:text-4xl font-black leading-tight text-text-main">
+              충전대기 목록
+            </h1>
+            <p className="text-text-muted">
+              결제 완료 후 아직 지갑에 반영되지 않은 충전 내역입니다. 승인하면
+              지갑에 반영되며, 환불 시 결제가 취소됩니다.
+            </p>
+          </div>
 
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
         {isLoading ? (
@@ -125,7 +138,7 @@ export function ChargesPendingPage() {
               <li
                 key={item.chargeCheckId}
                 ref={index === 0 ? firstItemRef : undefined}
-                className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4"
+                className="p-4 sm:p-6 flex flex-col gap-4"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">
@@ -141,7 +154,7 @@ export function ChargesPendingPage() {
                     {formatDateTime(item.expireAt)}
                   </p>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     onClick={() => confirmMutation.mutate(item.chargeCheckId)}
@@ -176,6 +189,45 @@ export function ChargesPendingPage() {
                     환불
                   </Button>
                 </div>
+                {refundTargetId === item.chargeCheckId && (
+                  <div className="w-full bg-gray-50 border border-border rounded-lg p-4">
+                    <label className="block text-sm font-semibold text-text-main mb-2">
+                      환불 사유 (선택)
+                    </label>
+                    <input
+                      type="text"
+                      value={refundReasonMap.get(item.chargeCheckId) ?? ""}
+                      onChange={(e) =>
+                        setRefundReasonMap((prev) => {
+                          const next = new Map(prev);
+                          next.set(item.chargeCheckId, e.target.value);
+                          return next;
+                        })
+                      }
+                      placeholder="사용자 요청"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    />
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        onClick={() => handleRefundSubmit(item.chargeCheckId)}
+                        loading={
+                          cancelMutation.isPending &&
+                          cancelMutation.variables?.id === item.chargeCheckId
+                        }
+                      >
+                        환불 요청
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setRefundTargetId(null)}
+                      >
+                        취소
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -190,12 +242,8 @@ export function ChargesPendingPage() {
           <span className="material-symbols-outlined text-lg">arrow_back</span>
           마이페이지로
         </Link>
-        <Link
-          to="/credits/charge"
-          className="text-primary font-semibold hover:underline flex items-center gap-1"
-        >
-          크레딧 충전
-        </Link>
+      </div>
+        </section>
       </div>
     </main>
   );

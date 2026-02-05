@@ -1,14 +1,18 @@
-import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { auctionApi } from "@/services/auctionApi";
-import { bidApi } from "@/services/bidApi";
 import { useAuthStore } from "@/stores/authStore";
 import { useAuctionWebSocket } from "@/hooks/useAuctionWebSocket";
-import { formatKrw, formatRelative } from "@/lib/format";
+import { auctionApi } from "@/services/auctionApi";
+import { bidApi } from "@/services/bidApi";
+import { userApi } from "@/services/userApi";
+import { wishApi } from "@/services/wishApi";
+import { reportApi } from "@/services/reportApi";
 import { getApiErrorMessage } from "@/lib/api";
+import { formatKrw, formatRelative } from "@/lib/format";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { BidHistoryItemRes } from "@/lib/types";
 
@@ -20,11 +24,16 @@ function minNextBid(current: number): number {
 export function AuctionDetailPage() {
   const { auctionId } = useParams<{ auctionId: string }>();
   const id = Number(auctionId);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const addToast = useToastStore((s) => s.add);
 
   const [bidAmount, setBidAmount] = useState("");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [wsSnapshot, setWsSnapshot] = useState<{
     currentPrice?: number;
     bidCount?: number;
@@ -32,10 +41,16 @@ export function AuctionDetailPage() {
     status?: string;
   }>({});
 
-  const { data: auction, isLoading } = useQuery({
+  const {
+    data: auction,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
     queryKey: ["auction", id],
     queryFn: () => auctionApi.getById(id),
-    enabled: Number.isInteger(id),
+    enabled: Number.isInteger(id) && id > 0,
+    retry: false,
   });
 
   const { data: bidPage } = useQuery({
@@ -45,10 +60,26 @@ export function AuctionDetailPage() {
   });
   const bids = bidPage?.content ?? [];
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => userApi.getProfile(),
+    enabled: isAuth,
+  });
+
   useAuctionWebSocket(
     Number.isInteger(id) ? id : null,
-    (data) => setWsSnapshot(data),
-    () => queryClient.invalidateQueries({ queryKey: ["auction", id] })
+    (data) =>
+      setWsSnapshot((prev) =>
+        Object.keys(data).length ? { ...prev, ...data } : prev
+      ),
+    (msg) => {
+      // 경매 정보 무효화
+      queryClient.invalidateQueries({ queryKey: ["auction", id] });
+      // 입찰 성공 시 입찰 내역도 무효화하여 최근 입찰 목록 실시간 업데이트
+      if (msg.type === "BID_SUCCESSED") {
+        queryClient.invalidateQueries({ queryKey: ["bid", id] });
+      }
+    }
   );
 
   const currentPrice =
@@ -59,7 +90,28 @@ export function AuctionDetailPage() {
   const bidCount = wsSnapshot.bidCount ?? auction?.bidCount ?? 0;
   const endAt = wsSnapshot.endAt ?? auction?.endAt;
   const status = wsSnapshot.status ?? auction?.status;
-  const canBid = (status === "RUNNING" || status === "DEADLINE") && isAuth;
+  const isMyAuction =
+    isAuth && profile && auction && auction.sellerId != null && profile.userId === auction.sellerId;
+  const canBid =
+    (status === "RUNNING" || status === "DEADLINE") && isAuth && !isMyAuction;
+  
+  // 경매 종료 후 낙찰자 확인 (최고 입찰자가 현재 사용자인지)
+  const isWinner = useMemo(() => {
+    if (!isAuth || !profile || !auction || status !== "SUCCESS" || bids.length === 0) {
+      return false;
+    }
+    // 입찰 내역은 최신순이므로, 최고가 입찰을 찾아야 함
+    const highestBid = bids.reduce((max, bid) => 
+      bid.bidPrice > max.bidPrice ? bid : max
+    );
+    return highestBid.bidderNickname === profile.nickname;
+  }, [isAuth, profile, auction, status, bids]);
+  
+  // 입찰에 참여했는지 확인
+  const hasParticipated = useMemo(() => {
+    if (!isAuth || !profile || bids.length === 0) return false;
+    return bids.some(bid => bid.bidderNickname === profile.nickname);
+  }, [isAuth, profile, bids]);
 
   const placeBid = useMutation({
     mutationFn: (amount: number) =>
@@ -73,6 +125,44 @@ export function AuctionDetailPage() {
       setBidAmount("");
       queryClient.invalidateQueries({ queryKey: ["auction", id] });
       queryClient.invalidateQueries({ queryKey: ["bid", id] });
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const wishToggle = useMutation({
+    mutationFn: (itemId: number) => wishApi.toggle(itemId),
+    onSuccess: (data) => {
+      addToast(data.wished ? "찜 목록에 추가되었습니다." : "찜이 해제되었습니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["auction", id] });
+      queryClient.invalidateQueries({ queryKey: ["wish"] });
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const reportSubmit = useMutation({
+    mutationFn: () =>
+      reportApi.create({
+        targetType: "AUCTION",
+        targetId: id,
+        reason: reportReason.trim(),
+        description: reportDescription.trim() || undefined,
+      }),
+    onSuccess: () => {
+      addToast("신고가 접수되었습니다. 검토 후 조치하겠습니다.", "success");
+      setReportModalOpen(false);
+      setReportReason("");
+      setReportDescription("");
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const cancelAuction = useMutation({
+    mutationFn: () => auctionApi.cancel(id),
+    onSuccess: () => {
+      addToast("경매가 취소되었습니다. 보증금은 등록 후 5분 이내 취소 시 환불됩니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["auction", id] });
+      queryClient.invalidateQueries({ queryKey: ["auctions"] });
+      navigate("/");
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -91,6 +181,22 @@ export function AuctionDetailPage() {
   };
 
   const [remaining, setRemaining] = useState(0);
+  const [imgIndex, setImgIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  useEffect(() => {
+    setImgIndex(0);
+  }, [id]);
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleEscape = (e: KeyboardEvent) =>
+      e.key === "Escape" && setLightboxOpen(false);
+    document.addEventListener("keydown", handleEscape);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "";
+    };
+  }, [lightboxOpen]);
   useEffect(() => {
     if (!endAt) return;
     const update = () => {
@@ -113,6 +219,44 @@ export function AuctionDetailPage() {
     "0"
   )}:${String(s).padStart(2, "0")}`;
 
+  const invalidId = !Number.isInteger(id) || id <= 0;
+  if (invalidId) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-6 py-8">
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <p className="text-text-muted font-medium">잘못된 경매 번호입니다.</p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-primary font-semibold hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (isError) {
+    return (
+      <main className="max-w-[1280px] mx-auto px-6 py-8">
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <p className="text-text-muted font-medium">
+            경매 정보를 불러올 수 없습니다.
+          </p>
+          <p className="mt-2 text-sm text-text-muted">
+            {error && getApiErrorMessage(error)}
+          </p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-primary font-semibold hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (isLoading || !auction) {
     return (
       <main className="max-w-[1280px] mx-auto px-6 py-8">
@@ -130,9 +274,11 @@ export function AuctionDetailPage() {
     );
   }
 
-  const img = auction.imageUrls?.[0];
+  const images = auction.imageUrls?.filter(Boolean) ?? [];
+  const currentImg = images[imgIndex];
 
   return (
+    <>
     <main className="max-w-[1280px] mx-auto px-6 py-8">
       <nav className="flex items-center gap-2 text-sm text-text-muted mb-6">
         <Link to="/" className="hover:text-primary">
@@ -145,13 +291,74 @@ export function AuctionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-7 space-y-6">
           <div className="relative group">
-            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 border border-border">
-              {img ? (
-                <img
-                  src={img}
-                  alt={auction.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                />
+            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 border border-border relative">
+              {currentImg ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(true)}
+                    className="absolute inset-0 w-full h-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset"
+                    aria-label="사진 전체 보기"
+                  >
+                    <img
+                      src={currentImg}
+                      alt={`${auction.title} ${imgIndex + 1}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 cursor-zoom-in"
+                    />
+                  </button>
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImgIndex((i) =>
+                            i <= 0 ? images.length - 1 : i - 1
+                          );
+                        }}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors z-10"
+                        aria-label="이전 이미지"
+                      >
+                        <span className="material-symbols-outlined">
+                          chevron_left
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImgIndex((i) =>
+                            i >= images.length - 1 ? 0 : i + 1
+                          );
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors z-10"
+                        aria-label="다음 이미지"
+                      >
+                        <span className="material-symbols-outlined">
+                          chevron_right
+                        </span>
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                        {images.map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setImgIndex(i);
+                            }}
+                            className={`w-2 h-2 rounded-full transition-colors ${
+                              i === imgIndex
+                                ? "bg-white scale-125"
+                                : "bg-white/50 hover:bg-white/80"
+                            }`}
+                            aria-label={`이미지 ${i + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-text-muted">
                   <span className="material-symbols-outlined text-6xl">
@@ -188,17 +395,140 @@ export function AuctionDetailPage() {
                 경매 #{auction.auctionId}
               </div>
             </div>
-            {/* 찜: 부분구현 - 상세 DTO에 itemId 없으면 버튼만 비활성/툴팁 */}
-            <button
-              type="button"
-              className="p-3 border border-border rounded-xl hover:bg-gray-50 text-text-muted cursor-not-allowed"
-              title="찜 기능은 상품별 itemId가 있을 때 사용 가능합니다"
-              disabled
-              aria-label="찜 (준비 중)"
-            >
-              <span className="material-symbols-outlined">favorite</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {auction.itemId != null && (
+                <button
+                  type="button"
+                  onClick={() => wishToggle.mutate(auction.itemId!)}
+                  disabled={wishToggle.isPending}
+                  className={`p-3 border rounded-xl transition-colors ${
+                    auction.isWished
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border hover:bg-gray-50 text-text-muted"
+                  }`}
+                  aria-label={auction.isWished ? "찜 해제" : "찜하기"}
+                  title={auction.isWished ? "찜 해제" : "찜하기"}
+                >
+                  <span
+                    className={`material-symbols-outlined ${auction.isWished ? "fill-icon" : ""}`}
+                  >
+                    favorite
+                  </span>
+                </button>
+              )}
+              {isAuth && (
+                <button
+                  type="button"
+                  onClick={() => setReportModalOpen(true)}
+                  className="p-3 border border-border rounded-xl hover:bg-gray-50 text-text-muted transition-colors"
+                  aria-label="신고"
+                  title="이 경매 신고하기"
+                >
+                  <span className="material-symbols-outlined">flag</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          <Modal
+            open={reportModalOpen}
+            onClose={() => {
+              setReportModalOpen(false);
+              setReportReason("");
+              setReportDescription("");
+            }}
+            title="경매 신고"
+          >
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!reportReason.trim()) {
+                  addToast("신고 사유를 입력해 주세요.", "error");
+                  return;
+                }
+                reportSubmit.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-semibold text-text-main mb-1.5">
+                  신고 사유 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  placeholder="예: 허위 정보, 부적절한 내용"
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                  maxLength={200}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-text-main mb-1.5">
+                  상세 설명 (선택)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="추가로 전달할 내용이 있으면 입력해 주세요."
+                  rows={3}
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+                  maxLength={500}
+                />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setReportModalOpen(false);
+                    setReportReason("");
+                    setReportDescription("");
+                  }}
+                >
+                  취소
+                </Button>
+                <Button type="submit" loading={reportSubmit.isPending}>
+                  신고하기
+                </Button>
+              </div>
+            </form>
+          </Modal>
+
+          <Modal
+            open={cancelModalOpen}
+            onClose={() => setCancelModalOpen(false)}
+            title="경매 취소 확인"
+          >
+            <div className="space-y-4">
+              <p className="text-text-main">
+                정말로 이 경매를 취소하시겠습니까?
+              </p>
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
+                <p className="font-semibold mb-2">보증금 안내:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>등록 후 5분 이내 취소: 보증금 전액 환불</li>
+                  <li>등록 후 5분 이후 취소: 보증금 몰수 (환불 불가)</li>
+                </ul>
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setCancelModalOpen(false)}
+                >
+                  돌아가기
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => cancelAuction.mutate()}
+                  loading={cancelAuction.isPending}
+                >
+                  경매 취소
+                </Button>
+              </div>
+            </div>
+          </Modal>
 
           <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -219,12 +549,20 @@ export function AuctionDetailPage() {
                 </div>
               </div>
               <div className="md:text-right">
-                <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">
-                  남은 시간
-                </p>
-                <div className="text-3xl font-bold font-mono tabular-nums tracking-tight">
-                  {remaining > 0 ? timeStr : "종료"}
-                </div>
+                {status === "DEADLINE" ? (
+                  <div className="text-2xl font-bold text-red-500">
+                    마감임박!
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">
+                      남은 시간
+                    </p>
+                    <div className="text-3xl font-bold font-mono tabular-nums tracking-tight">
+                      {remaining > 0 ? timeStr : "종료"}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -250,7 +588,7 @@ export function AuctionDetailPage() {
                     +{formatKrw(minNextBid(currentPrice))}
                   </button>
                 </div>
-                <div className="flex items-center">
+                <div className="relative flex items-center">
                   <span className="absolute left-5 text-text-muted font-bold text-xl">
                     ₩
                   </span>
@@ -285,10 +623,122 @@ export function AuctionDetailPage() {
               </form>
             )}
 
-            {(status === "ENDED" ||
-              status === "SUCCESS" ||
-              status === "FAILED") && (
+            {(status === "RUNNING" || status === "DEADLINE") && isMyAuction && (
+              <div className="mt-6 py-4 px-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-text-main flex items-center gap-2">
+                <span className="material-symbols-outlined">info</span>
+                <p className="font-medium">
+                  본인이 등록한 경매에는 입찰할 수 없습니다.
+                </p>
+              </div>
+            )}
+
+            {isMyAuction && (status === "READY" || status === "RUNNING") && (
               <div className="mt-6">
+                {bidCount > 0 ? (
+                  <div className="py-4 px-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 flex items-center gap-2">
+                    <span className="material-symbols-outlined">error</span>
+                    <p className="font-medium">
+                      입찰이 진행된 경매는 취소할 수 없습니다.
+                    </p>
+                  </div>
+                ) : (
+                  <Button
+                    variant="danger"
+                    className="w-full"
+                    onClick={() => setCancelModalOpen(true)}
+                  >
+                    <span className="material-symbols-outlined">cancel</span>
+                    경매 취소
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {(status === "SUCCESS" || status === "FAILED" || status === "ENDED") && (
+              <div className="mt-6 space-y-4">
+                {isAuth && (
+                  <>
+                    {isMyAuction && status === "SUCCESS" ? (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-3xl">
+                            check_circle
+                          </span>
+                          <h3 className="text-lg font-bold text-green-800 dark:text-green-200">
+                            경매가 성공적으로 끝났습니다
+                          </h3>
+                        </div>
+                        <p className="text-sm text-green-700 dark:text-green-300 mb-4">
+                          낙찰가: {formatKrw(currentPrice)}
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <Link to="/chat" className="flex-1">
+                            <Button variant="primary" className="w-full">
+                              <span className="material-symbols-outlined">chat</span>
+                              1:1 채팅
+                            </Button>
+                          </Link>
+                          <Link to="/delivery" className="flex-1">
+                            <Button variant="outline" className="w-full">
+                              <span className="material-symbols-outlined">local_shipping</span>
+                              배송 정보
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ) : hasParticipated && status === "SUCCESS" && isWinner ? (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-3xl">
+                            check_circle
+                          </span>
+                          <h3 className="text-lg font-bold text-green-800 dark:text-green-200">
+                            경매에 성공하셨습니다
+                          </h3>
+                        </div>
+                        <p className="text-sm text-green-700 dark:text-green-300 mb-4">
+                          낙찰가: {formatKrw(currentPrice)}
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <Link to="/chat" className="flex-1">
+                            <Button variant="primary" className="w-full">
+                              <span className="material-symbols-outlined">chat</span>
+                              1:1 채팅
+                            </Button>
+                          </Link>
+                          <Link to="/delivery" className="flex-1">
+                            <Button variant="outline" className="w-full">
+                              <span className="material-symbols-outlined">local_shipping</span>
+                              배송 정보
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ) : hasParticipated && status === "SUCCESS" && !isWinner ? (
+                      <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-3xl">
+                            sentiment_dissatisfied
+                          </span>
+                          <p className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                            아쉽게 경매에 실패하셨습니다
+                          </p>
+                        </div>
+                      </div>
+                    ) : status === "FAILED" ? (
+                      <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-3xl">
+                            cancel
+                          </span>
+                          <p className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                            경매가 유찰되었습니다
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
                 <Link to={`/auctions/${id}/result`}>
                   <Button variant="outline" className="w-full">
                     경매 결과 보기
@@ -346,6 +796,61 @@ export function AuctionDetailPage() {
         </div>
       </div>
     </main>
+
+    {lightboxOpen && currentImg && (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="사진 전체 보기"
+        onClick={() => setLightboxOpen(false)}
+      >
+        <button
+          type="button"
+          onClick={() => setLightboxOpen(false)}
+          className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
+          aria-label="닫기"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
+              aria-label="이전 이미지"
+            >
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors z-10"
+              aria-label="다음 이미지"
+            >
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          </>
+        )}
+        <img
+          src={currentImg}
+          alt={`${auction.title} ${imgIndex + 1}`}
+          className="max-w-full max-h-[90vh] w-auto h-auto object-contain cursor-zoom-out"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm">
+          {imgIndex + 1} / {images.length}
+        </p>
+      </div>
+    )}
+    </>
   );
 }
 
