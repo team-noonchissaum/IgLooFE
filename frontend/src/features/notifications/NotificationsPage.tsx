@@ -29,6 +29,7 @@ export function NotificationsPage() {
     (a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+  const unreadNotifications = notifications.filter((n) => !n.readAt);
 
   const readOne = useMutation({
     mutationFn: (id: number) => notificationApi.markRead(id),
@@ -67,7 +68,7 @@ export function NotificationsPage() {
         <section className="flex-1">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-text-main">알림</h1>
-            {notifications.some((n) => !n.readAt) && (
+            {unreadNotifications.length > 0 && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -79,10 +80,10 @@ export function NotificationsPage() {
             )}
           </div>
           <ul className="divide-y divide-border bg-white rounded-2xl border border-border overflow-hidden">
-            {notifications.length === 0 ? (
+            {unreadNotifications.length === 0 ? (
               <li className="p-12 text-center text-text-muted">알림이 없습니다.</li>
             ) : (
-              notifications.map((n) => {
+              unreadNotifications.map((n) => {
                 const link = getNotificationLink(n);
                 const content = (
                   <>
@@ -95,20 +96,18 @@ export function NotificationsPage() {
                         {formatRelative(n.createdAt)}
                       </p>
                     </div>
-                    {!n.readAt && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          readOne.mutate(n.id);
-                        }}
-                        loading={readOne.isPending}
-                      >
-                        읽음
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        readOne.mutate(n.id);
+                      }}
+                      loading={readOne.isPending}
+                    >
+                      읽음
+                    </Button>
                   </>
                 );
                 return (

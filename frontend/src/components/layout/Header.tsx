@@ -38,7 +38,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full bg-[color:var(--surface)]/90 backdrop-blur-lg border-b border-border h-[72px] flex items-center">
       <div className="max-w-[1200px] mx-auto w-full px-6 flex items-center justify-between gap-8">
-        <Link to="/" className="flex items-center gap-2 shrink-0">
+        <Link to="/?reset=1" className="flex items-center gap-2 shrink-0">
           <div className="w-10 h-10 flex items-center justify-center bg-primary rounded-xl text-white shadow-lg shadow-blue-100 dark:shadow-blue-900/30">
             <span className="material-symbols-outlined fill-icon text-2xl">
               gavel

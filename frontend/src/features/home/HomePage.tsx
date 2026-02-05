@@ -49,7 +49,7 @@ function getCategoryIdsIncludingChildren(
 }
 
 export function HomePage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const addToast = useToastStore((s) => s.add);
@@ -61,6 +61,24 @@ export function HomePage() {
     const id = categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined;
     setCategoryIdState(Number.isNaN(id) ? undefined : id);
   }, [categoryIdFromUrl]);
+  const resetFlag = searchParams.get("reset") === "1";
+  useEffect(() => {
+    if (!resetFlag) return;
+    setKeyword("");
+    setSearchInput("");
+    setPage(0);
+    setSort("LATEST");
+    setCategoryIdState(undefined);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("reset");
+        next.delete("categoryId");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [resetFlag, setSearchParams]);
 
   const [keyword, setKeyword] = useState("");
   const [sort, setSort] = useState<SortType>("LATEST");
@@ -246,6 +264,15 @@ export function HomePage() {
     setPage(0);
   };
 
+  const handleReset = () => {
+    setKeyword("");
+    setSearchInput("");
+    setPage(0);
+    setSort("LATEST");
+    setCategoryIdState(undefined);
+    navigate("/");
+  };
+
   const hasMore = searchData != null && !searchData.last;
 
   return (
@@ -303,6 +330,15 @@ export function HomePage() {
               >
                 검색
               </button>
+              {(keyword || categoryId != null) && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-4 py-2 rounded-xl border border-border text-sm font-semibold text-text-main hover:bg-gray-50 transition-colors"
+                >
+                  홈
+                </button>
+              )}
             </form>
             <div className="flex items-center gap-2">
               <span className="text-sm text-text-muted">정렬:</span>
@@ -329,6 +365,25 @@ export function HomePage() {
                 <AuctionCard key={auction.auctionId} auction={auction} />
               ))}
         </div>
+
+        {!isLoading && auctions.length === 0 && (
+          <div className="py-12 text-center text-text-muted">
+            <p className="font-medium">
+              {keyword || categoryId != null
+                ? "검색 결과가 없습니다."
+                : "진행중인 경매가 없습니다."}
+            </p>
+            {(keyword || categoryId != null) && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="mt-3 text-primary font-semibold hover:underline"
+              >
+                전체 경매 보기
+              </button>
+            )}
+          </div>
+        )}
 
         {hasMore && (
           <div className="flex justify-center mt-12 mb-8">
