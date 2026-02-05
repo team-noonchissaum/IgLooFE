@@ -53,8 +53,30 @@ api.interceptors.response.use(
 );
 
 export function getApiErrorMessage(err: unknown): string {
-  if (axios.isAxiosError(err) && err.response?.data?.message) {
-    return String(err.response.data.message);
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as
+      | {
+          message?: unknown;
+          error?: { message?: unknown };
+          errors?: Array<{ message?: unknown; defaultMessage?: unknown }>;
+          data?: { message?: unknown; errorMessage?: unknown };
+          errorMessage?: unknown;
+        }
+      | string
+      | undefined;
+
+    if (typeof data === "string" && data.trim()) return data;
+    if (data && typeof data === "object") {
+      if (data.message != null) return String(data.message);
+      if (data.error?.message != null) return String(data.error.message);
+      if (data.errorMessage != null) return String(data.errorMessage);
+      if (data.data?.message != null) return String(data.data.message);
+      if (data.data?.errorMessage != null) return String(data.data.errorMessage);
+      if (data.errors?.[0]?.message != null)
+        return String(data.errors[0].message);
+      if (data.errors?.[0]?.defaultMessage != null)
+        return String(data.errors[0].defaultMessage);
+    }
   }
   if (err instanceof Error) return err.message;
   return "오류가 발생했습니다.";

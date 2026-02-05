@@ -12,7 +12,7 @@ export function OAuthCallbackPage() {
     const refreshToken = searchParams.get("refreshToken");
     if (accessToken && refreshToken) {
       setTokens(accessToken, refreshToken);
-      navigate("/me", { replace: true });
+      navigate("/", { replace: true });
     } else {
       navigate("/", { replace: true });
     }

@@ -1,10 +1,12 @@
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { userApi } from "@/services/userApi";
 import { walletApi } from "@/services/walletApi";
 import { bidApi } from "@/services/bidApi";
-import { formatKrw } from "@/lib/format";
+import { formatDateTime, formatKrw } from "@/lib/format";
+import { MeSidebar } from "@/components/layout/MeSidebar";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
 
 export function MePage() {
   const { data: mypage, isLoading } = useQuery({
@@ -23,77 +25,31 @@ export function MePage() {
   });
   const myBids = myBidsPage?.content ?? [];
 
+  const { data: myAuctionsPage } = useQuery({
+    queryKey: ["users", "me", "auctions"],
+    queryFn: () => userApi.getMyAuctions(),
+  });
+  const myAuctions = myAuctionsPage?.content ?? [];
+
+  const balance = mypage?.balance ?? wallet?.balance ?? 0;
+
   if (isLoading || !mypage) {
     return (
       <main className="max-w-[1000px] mx-auto px-6 py-8">
-        <Skeleton className="h-24 w-64 mb-8" />
-        <Skeleton className="h-32 w-full rounded-xl mb-6" />
+        <div className="flex flex-col md:flex-row gap-8">
+          <MeSidebar />
+          <section className="flex-1">
+            <Skeleton className="h-32 w-full rounded-xl mb-6" />
+          </section>
+        </div>
       </main>
     );
   }
 
-  const balance = mypage.balance ?? wallet?.balance ?? 0;
-
   return (
     <main className="max-w-[1000px] mx-auto px-6 py-8">
       <div className="flex flex-col md:flex-row gap-8">
-        <aside className="w-full md:w-64 shrink-0">
-          <div className="flex gap-4 items-center mb-8">
-            <div className="size-16 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
-              {mypage.profileUrl ? (
-                <img
-                  src={mypage.profileUrl}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="material-symbols-outlined text-primary text-3xl">
-                  person
-                </span>
-              )}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-text-main">
-                {mypage.nickname}
-              </h1>
-              <p className="text-sm text-text-muted">
-                {mypage.email ?? "이메일 없음"}
-              </p>
-            </div>
-          </div>
-          <nav className="flex flex-col gap-1">
-            <Link
-              to="/me/edit"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 text-text-main font-medium transition-colors"
-            >
-              <span className="material-symbols-outlined">edit</span>
-              프로필 수정
-            </Link>
-            <Link
-              to="/wallet"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary-light text-primary font-semibold transition-colors"
-            >
-              <span className="material-symbols-outlined fill-icon">
-                account_balance_wallet
-              </span>
-              지갑
-            </Link>
-            <Link
-              to="/notifications"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 text-text-main font-medium transition-colors"
-            >
-              <span className="material-symbols-outlined">notifications</span>
-              알림
-            </Link>
-            <Link
-              to="/me/charges"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 text-text-main font-medium transition-colors"
-            >
-              <span className="material-symbols-outlined">pending_actions</span>
-              충전대기 목록 보기
-            </Link>
-          </nav>
-        </aside>
+        <MeSidebar />
         <section className="flex-1">
           <div className="bg-white rounded-xl border border-border p-6 shadow-sm mb-6">
             <h2 className="text-lg font-bold text-text-main mb-4 flex items-center gap-2">
@@ -111,7 +67,7 @@ export function MePage() {
               </span>
             </Link>
           </div>
-          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm mb-6">
             <h2 className="text-lg font-bold text-text-main mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">
                 gavel
@@ -124,32 +80,97 @@ export function MePage() {
                   참여한 경매가 없습니다.
                 </li>
               ) : (
-                myBids.slice(0, 10).map((b) => (
-                  <li
-                    key={`${b.auctionId}-${b.myHighestBidPrice}`}
-                    className="py-3 flex justify-between items-center"
-                  >
-                    <Link
-                      to={`/auctions/${b.auctionId}`}
-                      className="text-primary hover:underline font-medium"
+                myBids.slice(0, 10).map((b) => {
+                  const isEnded = b.auctionStatus === "SUCCESS" || 
+                                  b.auctionStatus === "FAILED" || 
+                                  b.auctionStatus === "ENDED";
+                  return (
+                    <li
+                      key={`${b.auctionId}-${b.myHighestBidPrice}`}
+                      className="py-3 flex flex-col gap-2"
                     >
-                      {b.itemTitle} (경매 #{b.auctionId})
-                    </Link>
-                    <span className="font-bold">
-                      {formatKrw(b.myHighestBidPrice)}
-                      {b.isHighestBidder && (
-                        <span className="text-primary text-xs ml-1">
-                          최고가
+                      <div className="flex justify-between items-center">
+                        <Link
+                          to={`/auctions/${b.auctionId}`}
+                          className="text-primary hover:underline font-medium"
+                        >
+                          {b.itemTitle} (경매 #{b.auctionId})
+                        </Link>
+                        <span className="font-bold">
+                          {formatKrw(b.myHighestBidPrice)}
+                          {b.isHighestBidder && (
+                            <span className="text-primary text-xs ml-1">
+                              최고가
+                            </span>
+                          )}
                         </span>
+                      </div>
+                      {isEnded && (
+                        <Link to={`/auctions/${b.auctionId}/result`} className="self-start">
+                          <Button variant="outline" size="sm">
+                            경매 결과 보기
+                          </Button>
+                        </Link>
                       )}
-                    </span>
-                  </li>
-                ))
+                    </li>
+                  );
+                })
               )}
             </ul>
-            <p className="text-sm text-text-muted mt-4">
-              내 등록 경매 목록은 서버 미지원으로 표시되지 않습니다.
-            </p>
+          </div>
+          <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-text-main mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">
+                inventory
+              </span>
+              내 등록 경매
+            </h2>
+            <ul className="divide-y divide-border">
+              {myAuctions.length === 0 ? (
+                <li className="py-8 text-center text-text-muted">
+                  등록한 경매가 없습니다.
+                </li>
+              ) : (
+                myAuctions.slice(0, 10).map((a) => {
+                  const isEnded = a.status === "SUCCESS" || 
+                                  a.status === "FAILED" || 
+                                  a.status === "ENDED";
+                  return (
+                    <li
+                      key={a.auctionId}
+                      className="py-3 flex flex-col gap-2"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <Link
+                            to={`/auctions/${a.auctionId}`}
+                            className="text-primary hover:underline font-medium"
+                          >
+                            {a.title}
+                          </Link>
+                          <p className="text-xs text-text-muted">
+                            종료: {formatDateTime(a.endAt)}
+                          </p>
+                        </div>
+                        <div className="text-sm text-text-main font-semibold">
+                          {formatKrw(a.currentPrice)}
+                          <span className="text-xs text-text-muted ml-2">
+                            {a.status}
+                          </span>
+                        </div>
+                      </div>
+                      {isEnded && (
+                        <Link to={`/auctions/${a.auctionId}/result`} className="self-start">
+                          <Button variant="outline" size="sm">
+                            경매 결과 보기
+                          </Button>
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })
+              )}
+            </ul>
           </div>
         </section>
       </div>

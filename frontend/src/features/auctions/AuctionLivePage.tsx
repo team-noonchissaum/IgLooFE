@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { auctionApi } from "@/services/auctionApi";
 import { bidApi } from "@/services/bidApi";
+import { userApi } from "@/services/userApi";
 import { useAuthStore } from "@/stores/authStore";
 import { useAuctionWebSocket } from "@/hooks/useAuctionWebSocket";
 import { formatKrw, formatRelative } from "@/lib/format";
@@ -41,9 +42,25 @@ export function AuctionLivePage() {
   });
   const bids = bidPage?.content ?? [];
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => userApi.getProfile(),
+    enabled: isAuth,
+  });
+
+  const isMyAuction =
+    isAuth &&
+    profile &&
+    auction &&
+    auction.sellerId != null &&
+    profile.userId === auction.sellerId;
+
   useAuctionWebSocket(
     Number.isInteger(auctionId) ? auctionId : null,
-    (data) => setWsSnapshot(data),
+    (data) =>
+      setWsSnapshot((prev) =>
+        Object.keys(data).length ? { ...prev, ...data } : prev
+      ),
     () => queryClient.invalidateQueries({ queryKey: ["bid", auctionId] })
   );
 
@@ -85,6 +102,10 @@ export function AuctionLivePage() {
     const amount = minNextBid(currentPrice) + delta;
     if (!isAuth) {
       addToast("로그인이 필요합니다.", "error");
+      return;
+    }
+    if (isMyAuction) {
+      addToast("본인이 등록한 경매에는 입찰할 수 없습니다.", "error");
       return;
     }
     placeBid.mutate(amount);
@@ -184,15 +205,33 @@ export function AuctionLivePage() {
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-border shadow-md">
+          {isMyAuction && (
+            <p className="text-text-main text-sm font-medium mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-lg">info</span>
+              본인이 등록한 경매에는 입찰할 수 없습니다.
+            </p>
+          )}
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="flex-1 grid grid-cols-3 gap-3 w-full">
-              <Button variant="secondary" onClick={() => handleQuickBid(0)}>
+              <Button
+                variant="secondary"
+                onClick={() => handleQuickBid(0)}
+                disabled={isMyAuction}
+              >
                 +1,000
               </Button>
-              <Button variant="secondary" onClick={() => handleQuickBid(5000)}>
+              <Button
+                variant="secondary"
+                onClick={() => handleQuickBid(5000)}
+                disabled={isMyAuction}
+              >
                 +5,000
               </Button>
-              <Button variant="secondary" onClick={() => handleQuickBid(10000)}>
+              <Button
+                variant="secondary"
+                onClick={() => handleQuickBid(10000)}
+                disabled={isMyAuction}
+              >
                 +10,000
               </Button>
             </div>

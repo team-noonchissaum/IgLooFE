@@ -43,6 +43,7 @@ export interface AuctionListRes {
 /** 경매 상세 - GET /api/auctions/{id} → AuctionRes */
 export interface AuctionRes {
   auctionId: number;
+  itemId?: number;
   title: string;
   description: string;
   currentPrice: number;
@@ -51,6 +52,7 @@ export interface AuctionRes {
   status: AuctionStatus;
   startAt: string;
   endAt: string;
+  sellerId?: number;
   sellerNickname: string;
   imageUrls: string[];
   categoryId: number;
@@ -66,7 +68,8 @@ export type AuctionStatus =
   | "ENDED"
   | "SUCCESS"
   | "FAILED"
-  | "CANCELED";
+  | "CANCELED"
+  | "BLOCKED";
 
 /** 경매 등록 요청 - POST /api/auctions (AuctionRegisterReq) */
 export interface AuctionRegisterReq {
@@ -210,7 +213,7 @@ export interface ProfileRes {
   status: string;
 }
 
-/** 마이페이지 - GET /api/users/me/mypage → MyPageRes */
+/** 마이페이지 - GET /api/mypage → MyPageRes */
 export interface MyPageRes {
   userId: number;
   email: string;
@@ -246,6 +249,7 @@ export interface WishToggleRes {
 /** 찜 목록 항목 - GET /api/item/wish → WishItemRes[] */
 export interface WishItemRes {
   itemId: number;
+  auctionId: number | null;
   title: string;
   startPrice: number;
   sellerName: string;

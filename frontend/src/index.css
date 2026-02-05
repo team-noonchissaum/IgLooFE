@@ -12,9 +12,51 @@
   --text-muted: #868e96;
 }
 
+.dark {
+  --surface: #0f172a;
+  --border: #334155;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+}
+
 body {
   font-family: "Plus Jakarta Sans", "Pretendard", sans-serif;
-  @apply bg-white text-[#1a1c1e] min-h-screen antialiased;
+  @apply min-h-screen antialiased;
+  background-color: var(--surface);
+  color: var(--text-main);
+}
+
+.dark .bg-white {
+  background-color: var(--surface) !important;
+}
+.dark .text-text-main {
+  color: var(--text-main) !important;
+}
+.dark .text-text-muted {
+  color: var(--text-muted) !important;
+}
+.dark .border-border {
+  border-color: var(--border) !important;
+}
+.dark .bg-gray-50 {
+  background-color: #1e293b !important;
+}
+.dark .bg-gray-100 {
+  background-color: #334155 !important;
+}
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: #334155 !important;
+}
+.dark .hover\:bg-gray-200:hover {
+  background-color: #475569 !important;
+}
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #1e293b !important;
+  border-color: var(--border);
+  color: var(--text-main);
 }
 
 .material-symbols-outlined {
@@ -54,5 +96,5 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-gray-200 rounded-full;
+  @apply bg-gray-200 dark:bg-slate-600 rounded-full;
 }

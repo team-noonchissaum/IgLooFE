@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/authStore";
+import { useToastStore } from "@/stores/toastStore";
 import { auctionApi } from "@/services/auctionApi";
+import { wishApi } from "@/services/wishApi";
+import { categoryApi } from "@/services/categoryApi";
+import { getApiErrorMessage } from "@/lib/api";
 import { formatKrw } from "@/lib/format";
 import { SkeletonCard } from "@/components/ui/Skeleton";
-import type { AuctionListRes } from "@/lib/types";
+import { CategorySidebar } from "@/components/layout/CategoryBar";
+import type { AuctionListRes, Category } from "@/lib/types";
 
 type SortType =
   | "LATEST"
@@ -21,8 +27,31 @@ const sortLabels: Record<SortType, string> = {
   PRICE_LOW: "가격 낮은순",
 };
 
+/** 카테고리 트리에서 선택된 카테고리와 모든 하위 카테고리 ID를 수집 */
+function getCategoryIdsIncludingChildren(
+  categories: Category[],
+  categoryId: number
+): number[] {
+  const result: number[] = [categoryId];
+  
+  const collectChildren = (id: number) => {
+    categories.forEach((cat) => {
+      if (cat.parentId === id) {
+        result.push(cat.id);
+        collectChildren(cat.id);
+      }
+    });
+  };
+  
+  collectChildren(categoryId);
+  return result;
+}
+
 export function HomePage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const addToast = useToastStore((s) => s.add);
   const categoryIdFromUrl = searchParams.get("categoryId");
   const [categoryId, setCategoryIdState] = useState<number | undefined>(() =>
     categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined
@@ -37,25 +66,178 @@ export function HomePage() {
   const [page, setPage] = useState(0);
   const [searchInput, setSearchInput] = useState("");
 
+  // 카테고리 목록 가져오기
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => categoryApi.list(),
+    retry: false,
+  });
+
+  // 대분류 선택 시 하위 카테고리까지 포함한 ID 리스트
+  const categoryIdsToSearch = useMemo(() => {
+    if (categoryId == null) return undefined;
+    
+    // 선택된 카테고리가 대분류인지 확인 (parentId가 null)
+    const selectedCategory = categories.find((c) => c.id === categoryId);
+    if (selectedCategory?.parentId == null) {
+      // 대분류인 경우 하위 카테고리까지 포함
+      return getCategoryIdsIncludingChildren(categories, categoryId);
+    }
+    // 소분류인 경우 해당 카테고리만
+    return [categoryId];
+  }, [categoryId, categories]);
+
   const { data: searchData, isLoading } = useQuery({
     queryKey: [
       "auctions",
       "search",
       keyword || undefined,
-      categoryId,
+      categoryIdsToSearch?.join(","),
       sort,
       page,
     ],
-    queryFn: () =>
-      auctionApi.search({
-        keyword: keyword || undefined,
-        categoryId,
-        sort,
-        page,
+    queryFn: async () => {
+      // 가격 정렬 시 백엔드 Redis 정렬은 단일 카테고리만 지원하므로
+      // 프론트엔드에서 모든 결과를 받아서 정렬하도록 처리
+      const isPriceSort = sort === "PRICE_HIGH" || sort === "PRICE_LOW";
+      
+      if (!categoryIdsToSearch || categoryIdsToSearch.length === 0) {
+        // 카테고리가 없을 때 가격 정렬은 일반 정렬로 처리 (백엔드에서 빈 결과 반환 방지)
+        if (isPriceSort) {
+          // 모든 경매를 가져와서 프론트에서 정렬
+          const allResults = await auctionApi.search({
+            keyword: keyword || undefined,
+            categoryId: undefined,
+            sort: "LATEST", // 백엔드에서 가격 정렬은 카테고리 필수이므로 일반 정렬 사용
+            page: 0,
+            size: 1000, // 충분히 큰 값
+          });
+          
+          // 상태 필터링
+          const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "READY"];
+          let filtered = (allResults?.content ?? []).filter(
+            (a) => !excludedStatuses.includes(a.status)
+          );
+          
+          // keyword 필터링
+          if (keyword) {
+            const lowerKeyword = keyword.toLowerCase();
+            filtered = filtered.filter((a) =>
+              a.title.toLowerCase().includes(lowerKeyword)
+            );
+          }
+          
+          // 가격 정렬
+          const sorted = [...filtered].sort((a, b) => {
+            return sort === "PRICE_HIGH" 
+              ? b.currentPrice - a.currentPrice
+              : a.currentPrice - b.currentPrice;
+          });
+          
+          // 페이지네이션
+          const startIndex = page * 12;
+          const endIndex = startIndex + 12;
+          return {
+            content: sorted.slice(startIndex, endIndex),
+            totalElements: sorted.length,
+            totalPages: Math.ceil(sorted.length / 12),
+            size: 12,
+            number: page,
+            first: page === 0,
+            last: endIndex >= sorted.length,
+          };
+        }
+        
+        return auctionApi.search({
+          keyword: keyword || undefined,
+          categoryId: undefined,
+          sort,
+          page,
+          size: 12,
+        });
+      }
+
+      // 여러 카테고리 결과를 병렬로 가져오기
+      // 가격 정렬 시 백엔드 Redis 정렬은 단일 카테고리만 지원하므로 일반 정렬로 호출
+      const queries = categoryIdsToSearch.map((catId) =>
+        auctionApi.search({
+          keyword: isPriceSort ? undefined : (keyword || undefined),
+          categoryId: catId,
+          sort: isPriceSort ? "LATEST" : sort, // 가격 정렬 시 일반 정렬로 호출
+          page: 0,
+          size: 100, // 충분히 큰 값으로 설정
+        })
+      );
+      
+      const results = await Promise.all(queries);
+      
+      // 결과 합치기
+      const allAuctions: AuctionListRes[] = [];
+      results.forEach((result) => {
+        if (result?.content) {
+          allAuctions.push(...result.content);
+        }
+      });
+
+      // 중복 제거 (auctionId 기준)
+      const uniqueAuctions = Array.from(
+        new Map(allAuctions.map((a) => [a.auctionId, a])).values()
+      );
+
+      // 상태 필터링 (ENDED, SUCCESS, FAILED, CANCELED, READY 제외)
+      const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "READY"];
+      let filteredAuctions = uniqueAuctions.filter(
+        (a) => !excludedStatuses.includes(a.status)
+      );
+
+      // keyword 필터링 (가격 정렬 시 keyword가 제외되었으므로 프론트에서 필터링)
+      if (keyword && isPriceSort) {
+        const lowerKeyword = keyword.toLowerCase();
+        filteredAuctions = filteredAuctions.filter((a) =>
+          a.title.toLowerCase().includes(lowerKeyword)
+        );
+      }
+
+      // 정렬 적용
+      const sortedAuctions = [...filteredAuctions].sort((a, b) => {
+        switch (sort) {
+          case "LATEST":
+            return b.auctionId - a.auctionId;
+          case "BID_COUNT":
+            return (b.bidCount ?? 0) - (a.bidCount ?? 0);
+          case "DEADLINE":
+            return new Date(a.endAt).getTime() - new Date(b.endAt).getTime();
+          case "PRICE_HIGH":
+            return b.currentPrice - a.currentPrice;
+          case "PRICE_LOW":
+            return a.currentPrice - b.currentPrice;
+          default:
+            return 0;
+        }
+      });
+
+      // 페이지네이션 적용
+      const startIndex = page * 12;
+      const endIndex = startIndex + 12;
+      const paginatedAuctions = sortedAuctions.slice(startIndex, endIndex);
+
+      return {
+        content: paginatedAuctions,
+        totalElements: sortedAuctions.length,
+        totalPages: Math.ceil(sortedAuctions.length / 12),
         size: 12,
-      }),
+        number: page,
+        first: page === 0,
+        last: endIndex >= sortedAuctions.length,
+      };
+    },
     retry: false,
   });
+
+  const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "READY"];
+  const auctions = (searchData?.content ?? []).filter(
+    (a) => !excludedStatuses.includes(a.status)
+  );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,41 +245,60 @@ export function HomePage() {
     setPage(0);
   };
 
-  const auctions = searchData?.content ?? [];
   const hasMore = searchData != null && !searchData.last;
 
   return (
-    <main className="max-w-[1200px] mx-auto px-6 py-8">
-      <section className="flex flex-col gap-6">
+    <div className="flex max-w-[1200px] mx-auto">
+      <CategorySidebar />
+      <main className="flex-1 px-6 py-8">
+        <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <h2 className="text-2xl font-bold tracking-tight text-text-main">
               진행 중인 경매
             </h2>
-            <Link
-              to="/auctions/new"
-              className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover flex items-center gap-2 transition-colors shrink-0"
-            >
-              <span className="material-symbols-outlined text-lg">
-                add_circle
-              </span>
-              경매 등록
-            </Link>
+            {isAuth ? (
+              <Link
+                to="/auctions/new"
+                className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover flex items-center gap-2 transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-lg">
+                  add_circle
+                </span>
+                경매 등록
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  addToast("경매 등록을 위해 로그인해 주세요.", "info");
+                  navigate("/login?redirect=/auctions/new");
+                }}
+                className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover flex items-center gap-2 transition-colors shrink-0"
+              >
+                <span className="material-symbols-outlined text-lg">
+                  add_circle
+                </span>
+                경매 등록
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
             <form
               onSubmit={handleSearch}
-              className="flex items-center gap-2 flex-wrap"
+              className="flex items-center gap-2 flex-1 min-w-[300px]"
             >
               <input
                 type="text"
                 placeholder="검색..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="rounded-xl border border-border px-4 py-2 text-sm w-48 focus:ring-2 focus:ring-primary focus:border-primary"
+                className="flex-1 rounded-xl border border-border px-4 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white dark:bg-[var(--surface)] text-text-main"
                 aria-label="검색어"
               />
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover"
+                className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover transition-colors"
               >
                 검색
               </button>
@@ -107,7 +308,7 @@ export function HomePage() {
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortType)}
-                className="text-sm font-bold text-primary border-0 bg-transparent cursor-pointer focus:ring-0"
+                className="text-sm font-bold text-primary border-0 bg-transparent cursor-pointer focus:ring-0 dark:text-primary"
                 aria-label="정렬"
               >
                 {(Object.keys(sortLabels) as SortType[]).map((s) => (
@@ -139,12 +340,26 @@ export function HomePage() {
             </button>
           </div>
         )}
-      </section>
-    </main>
+        </section>
+      </main>
+    </div>
   );
 }
 
 function AuctionCard({ auction }: { auction: AuctionListRes }) {
+  const queryClient = useQueryClient();
+  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const addToast = useToastStore((s) => s.add);
+  const wishToggle = useMutation({
+    mutationFn: (itemId: number) => wishApi.toggle(itemId),
+    onSuccess: (data) => {
+      addToast(data.wished ? "찜 목록에 추가되었습니다." : "찜이 해제되었습니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["auctions"] });
+      queryClient.invalidateQueries({ queryKey: ["wish"] });
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
   const img = auction.thumbnailUrl ?? undefined;
   const isLive = auction.status === "RUNNING" || auction.status === "DEADLINE";
   const endAtMs = auction.endAt
@@ -170,6 +385,16 @@ function AuctionCard({ auction }: { auction: AuctionListRes }) {
     "0"
   )}:${String(s).padStart(2, "0")}`;
 
+  const handleWishClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isAuth) {
+      addToast("찜하려면 로그인해 주세요.", "info");
+      return;
+    }
+    wishToggle.mutate(auction.itemId);
+  };
+
   return (
     <Link
       to={`/auctions/${auction.auctionId}`}
@@ -186,6 +411,29 @@ function AuctionCard({ auction }: { auction: AuctionListRes }) {
           <div className="w-full h-full flex items-center justify-center text-text-muted">
             <span className="material-symbols-outlined text-5xl">image</span>
           </div>
+        )}
+        {isAuth && (
+          <button
+            type="button"
+            onClick={handleWishClick}
+            disabled={wishToggle.isPending}
+            className={`absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors z-10 ${
+              auction.isWished
+                ? "bg-red-500/90"
+                : "bg-white/90 text-text-muted hover:bg-white"
+            }`}
+            aria-label={auction.isWished ? "찜 해제" : "찜하기"}
+          >
+            <span
+              className={`material-symbols-outlined text-xl ${
+                auction.isWished
+                  ? "fill-icon text-white"
+                  : "text-text-muted"
+              }`}
+            >
+              favorite
+            </span>
+          </button>
         )}
         <div className="absolute bottom-3 left-3">
           <div
@@ -219,14 +467,24 @@ function AuctionCard({ auction }: { auction: AuctionListRes }) {
               {formatKrw(auction.currentPrice)}
             </span>
           </div>
-          {(auction.bidCount ?? 0) > 0 && (
-            <div className="flex items-center gap-1 text-primary text-[13px] font-bold">
-              <span className="material-symbols-outlined text-[18px]">
-                gavel
-              </span>
-              {auction.bidCount}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {(auction.bidCount ?? 0) > 0 && (
+              <div className="flex items-center gap-1 text-primary text-[13px] font-bold">
+                <span className="material-symbols-outlined text-[18px]">
+                  gavel
+                </span>
+                {auction.bidCount}
+              </div>
+            )}
+            {(auction.wishCount ?? 0) > 0 && (
+              <div className="flex items-center gap-1 text-red-500 text-[13px] font-bold">
+                <span className="material-symbols-outlined text-[18px] fill-icon">
+                  favorite
+                </span>
+                {auction.wishCount}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Link>
