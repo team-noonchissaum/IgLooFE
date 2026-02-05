@@ -58,8 +58,8 @@ export function ChatbotWidget() {
       } else if (data.type === "ACTION") {
         setCurrentNode(null);
         setAction(data.action ?? null);
-        // actionTarget이 있는 경우에만 링크 메시지 표시
-        if (data.action?.actionTarget) {
+        // actionType이 LINK인 경우 링크 메시지 표시 (actionTarget이 없어도 메시지 기반으로 추론 가능)
+        if (data.action?.actionType === "LINK") {
           setMessages((prev) => [
             ...prev,
             {
@@ -68,15 +68,21 @@ export function ChatbotWidget() {
               from: "bot",
             },
           ]);
-        } else {
-          // actionTarget이 없는 경우 (예: 결제 상태 확인 등)
+        } else if (data.action?.actionType === "API") {
           setMessages((prev) => [
             ...prev,
             {
               id: `bot-action-${Date.now()}`,
-              text: data.action?.actionType === "API" 
-                ? "요청을 처리했습니다." 
-                : "안내가 완료되었습니다.",
+              text: "요청을 처리했습니다.",
+              from: "bot",
+            },
+          ]);
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `bot-action-${Date.now()}`,
+              text: "안내가 완료되었습니다.",
               from: "bot",
             },
           ]);
@@ -137,10 +143,44 @@ export function ChatbotWidget() {
     return backendPath;
   };
 
+  // 메시지 내용 기반으로 경로 추론 (actionTarget이 없을 때 사용)
+  const inferPathFromMessages = (messages: ChatMessage[]): string | null => {
+    const lastMessages = messages.slice(-3).map(m => m.text.toLowerCase());
+    const allText = lastMessages.join(" ");
+    
+    // 결제 관련 키워드
+    if (allText.includes("결제 진행") || allText.includes("충전") || allText.includes("크레딧")) {
+      return "/credits/charge";
+    }
+    if (allText.includes("결제 상태") || allText.includes("충전 대기") || allText.includes("결제 확인")) {
+      return "/me/charges";
+    }
+    if (allText.includes("결제 안내")) {
+      return "/credits/charge";
+    }
+    if (allText.includes("경매 등록") || allText.includes("등록하기")) {
+      return "/auctions/new";
+    }
+    if (allText.includes("지갑") || allText.includes("잔액")) {
+      return "/wallet";
+    }
+    if (allText.includes("마이페이지") || allText.includes("내 정보")) {
+      return "/me";
+    }
+    
+    return null;
+  };
+
   const actionLink = useMemo(() => {
     if (!action || action.actionType !== "LINK") return null;
-    const target = action.actionTarget;
-    if (!target) return null;
+    
+    let target = action.actionTarget;
+    
+    // actionTarget이 없으면 메시지에서 추론
+    if (!target || target.trim() === "") {
+      target = inferPathFromMessages(messages);
+      if (!target) return null;
+    }
     
     // 상대 경로를 절대 경로로 변환 (앞에 /가 없으면 추가)
     let normalizedTarget = target.startsWith("/") ? target : `/${target}`;
@@ -160,7 +200,7 @@ export function ChatbotWidget() {
       target: normalizedTarget,
       external: isExternal,
     };
-  }, [action, isAuth]);
+  }, [action, isAuth, messages]);
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
