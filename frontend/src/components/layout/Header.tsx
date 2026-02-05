@@ -9,7 +9,6 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 export function Header() {
   const navigate = useNavigate();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
-  const role = useAuthStore((s) => s.role);
   const setRole = useAuthStore((s) => s.setRole);
   const isAdmin = useAuthStore((s) => s.isAdmin());
   const logout = useAuthStore((s) => s.logout);

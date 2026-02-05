@@ -32,7 +32,6 @@ function getCategoryIdsIncludingChildren(
   categories: Category[],
   categoryId: number
 ): number[] {
-  const byId = new Map(categories.map((c) => [c.id, c]));
   const result: number[] = [categoryId];
   
   const collectChildren = (id: number) => {
@@ -203,7 +202,7 @@ export function HomePage() {
       const sortedAuctions = [...filteredAuctions].sort((a, b) => {
         switch (sort) {
           case "LATEST":
-            return new Date(b.startAt).getTime() - new Date(a.startAt).getTime();
+            return b.auctionId - a.auctionId;
           case "BID_COUNT":
             return (b.bidCount ?? 0) - (a.bidCount ?? 0);
           case "DEADLINE":

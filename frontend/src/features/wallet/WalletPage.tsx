@@ -29,12 +29,6 @@ export function WalletPage() {
     queryFn: () => walletTransactionApi.getMe({ page, size: 20 }),
   });
 
-  const { data: withdrawalPage } = useQuery({
-    queryKey: ["withdrawals", "me", page],
-    queryFn: () => withdrawalApi.getMe({ page, size: 20 }),
-  });
-  const withdrawals = withdrawalPage?.content ?? [];
-
   const withdrawMutation = useMutation({
     mutationFn: () =>
       withdrawalApi.request({
