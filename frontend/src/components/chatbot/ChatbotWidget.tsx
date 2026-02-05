@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
@@ -22,14 +22,6 @@ export function ChatbotWidget() {
   const [currentNode, setCurrentNode] = useState<ChatNodeRes | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [action, setAction] = useState<ChatActionRes | null>(null);
-
-  // 챗봇이 열릴 때 토큰 상태 확인
-  useEffect(() => {
-    if (isOpen && !isAuth) {
-      // 토큰이 없으면 챗봇을 닫지 않고 로그인 UI만 표시
-      // (이미 UI에서 처리됨)
-    }
-  }, [isOpen, isAuth]);
 
   const { data: scenarios = [], isLoading } = useQuery({
     queryKey: ["chatbot", "scenarios"],
