@@ -254,35 +254,43 @@ export function AuctionLivePage() {
               {formatKrw(currentPrice)}
             </h2>
           </div>
-          <p className="text-[10px] text-center font-bold uppercase text-text-muted mb-3">
-            남은 시간
-          </p>
-          <div className="flex gap-2">
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex h-14 items-center justify-center rounded-lg bg-red-50 border border-red-200">
-                <p className="text-xl font-black">
-                  {String(h).padStart(2, "0")}
-                </p>
-              </div>
-              <p className="text-[10px] font-bold uppercase opacity-60">시</p>
+          {auction.status === "DEADLINE" ? (
+            <div className="text-center py-6">
+              <p className="text-sm font-bold text-red-500">마감임박!</p>
             </div>
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex h-14 items-center justify-center rounded-lg bg-red-50 border border-red-200">
-                <p className="text-xl font-black">
-                  {String(m).padStart(2, "0")}
-                </p>
+          ) : (
+            <>
+              <p className="text-[10px] text-center font-bold uppercase text-text-muted mb-3">
+                남은 시간
+              </p>
+              <div className="flex gap-2">
+                <div className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full flex h-14 items-center justify-center rounded-lg bg-red-50 border border-red-200">
+                    <p className="text-xl font-black">
+                      {String(h).padStart(2, "0")}
+                    </p>
+                  </div>
+                  <p className="text-[10px] font-bold uppercase opacity-60">시</p>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full flex h-14 items-center justify-center rounded-lg bg-red-50 border border-red-200">
+                    <p className="text-xl font-black">
+                      {String(m).padStart(2, "0")}
+                    </p>
+                  </div>
+                  <p className="text-[10px] font-bold uppercase opacity-60">분</p>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full flex h-14 items-center justify-center rounded-lg bg-red-600 text-white">
+                    <p className="text-xl font-black">
+                      {String(s).padStart(2, "0")}
+                    </p>
+                  </div>
+                  <p className="text-[10px] font-bold uppercase opacity-60">초</p>
+                </div>
               </div>
-              <p className="text-[10px] font-bold uppercase opacity-60">분</p>
-            </div>
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex h-14 items-center justify-center rounded-lg bg-red-600 text-white">
-                <p className="text-xl font-black">
-                  {String(s).padStart(2, "0")}
-                </p>
-              </div>
-              <p className="text-[10px] font-bold uppercase opacity-60">초</p>
-            </div>
-          </div>
+            </>
+          )}
         </div>
         <div className="bg-white rounded-xl border border-border flex-1 flex flex-col shadow-sm max-h-[400px]">
           <div className="p-4 border-b border-border flex items-center justify-between bg-primary/5">

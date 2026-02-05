@@ -506,7 +506,11 @@ function AuctionCard({ auction }: { auction: AuctionListRes }) {
                 isLive ? "text-primary" : "text-[#495057]"
               }`}
             >
-              {remaining > 0 ? timeStr : "종료"}
+              {auction.status === "DEADLINE"
+                ? "마감임박!"
+                : remaining > 0
+                ? timeStr
+                : "종료"}
             </span>
           </div>
         </div>

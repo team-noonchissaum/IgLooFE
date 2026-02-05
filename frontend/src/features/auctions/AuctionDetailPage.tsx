@@ -549,12 +549,20 @@ export function AuctionDetailPage() {
                 </div>
               </div>
               <div className="md:text-right">
-                <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">
-                  남은 시간
-                </p>
-                <div className="text-3xl font-bold font-mono tabular-nums tracking-tight">
-                  {remaining > 0 ? timeStr : "종료"}
-                </div>
+                {status === "DEADLINE" ? (
+                  <div className="text-2xl font-bold text-red-500">
+                    마감임박!
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">
+                      남은 시간
+                    </p>
+                    <div className="text-3xl font-bold font-mono tabular-nums tracking-tight">
+                      {remaining > 0 ? timeStr : "종료"}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
