@@ -93,11 +93,20 @@ export function ChatbotWidget() {
     if (!action || action.actionType !== "LINK") return null;
     const target = action.actionTarget;
     if (!target) return null;
+    
+    // 상대 경로를 절대 경로로 변환 (앞에 /가 없으면 추가)
+    const normalizedTarget = target.startsWith("/") ? target : `/${target}`;
+    
+    // 로그인된 상태에서 로그인 페이지로 가는 링크는 표시하지 않음
+    if (isAuth && (normalizedTarget === "/login" || normalizedTarget === "/login/")) {
+      return null;
+    }
+    
     return {
-      target,
+      target: normalizedTarget,
       external: /^https?:\/\//i.test(target),
     };
-  }, [action]);
+  }, [action, isAuth]);
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
@@ -220,6 +229,7 @@ export function ChatbotWidget() {
                       target="_blank"
                       rel="noreferrer"
                       className="text-primary text-xs font-semibold hover:underline"
+                      onClick={() => setIsOpen(false)}
                     >
                       안내 링크 열기
                     </a>
@@ -227,6 +237,7 @@ export function ChatbotWidget() {
                     <Link
                       to={actionLink.target}
                       className="text-primary text-xs font-semibold hover:underline"
+                      onClick={() => setIsOpen(false)}
                     >
                       안내 링크 열기
                     </Link>
