@@ -10,6 +10,7 @@ import { getApiErrorMessage } from "@/lib/api";
 import { formatKrw } from "@/lib/format";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { CategorySidebar } from "@/components/layout/CategoryBar";
+import { ChatbotWidget } from "@/components/chatbot/ChatbotWidget";
 import type { AuctionListRes, Category } from "@/lib/types";
 
 type SortType =
@@ -250,7 +251,7 @@ export function HomePage() {
   return (
     <div className="flex max-w-[1200px] mx-auto">
       <CategorySidebar />
-      <main className="flex-1 px-6 py-8">
+      <main className="flex-1 px-6 py-8 relative">
         <section className="flex flex-col gap-6">
         <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -341,6 +342,7 @@ export function HomePage() {
           </div>
         )}
         </section>
+        <ChatbotWidget />
       </main>
     </div>
   );
