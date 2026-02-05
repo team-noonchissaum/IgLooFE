@@ -156,7 +156,7 @@ export function ChatbotWidget() {
       return "/me/charges";
     }
     if (allText.includes("결제 안내")) {
-      return "/credits/charge";
+      return "/credits/charge"; // 결제 안내는 크레딧 충전 페이지로
     }
     if (allText.includes("경매 등록") || allText.includes("등록하기")) {
       return "/auctions/new";
@@ -176,6 +176,11 @@ export function ChatbotWidget() {
     
     let target = action.actionTarget;
     
+    // 메시지에서 "결제 안내" 키워드 확인
+    const lastMessages = messages.slice(-3).map(m => m.text.toLowerCase());
+    const allText = lastMessages.join(" ");
+    const isPaymentGuide = allText.includes("결제 안내");
+    
     // actionTarget이 없으면 메시지에서 추론
     if (!target || target.trim() === "") {
       target = inferPathFromMessages(messages);
@@ -187,6 +192,11 @@ export function ChatbotWidget() {
     
     // 백엔드 경로를 프론트엔드 경로로 매핑
     normalizedTarget = mapBackendPathToFrontend(normalizedTarget);
+    
+    // "결제 안내 보기"인 경우 로그인 페이지로 가는 링크 버튼을 완전히 삭제
+    if (isPaymentGuide && (normalizedTarget === "/login" || normalizedTarget === "/login/")) {
+      return null;
+    }
     
     // 로그인된 상태에서 로그인 페이지로 가는 링크는 표시하지 않음
     if (isAuth && (normalizedTarget === "/login" || normalizedTarget === "/login/")) {
