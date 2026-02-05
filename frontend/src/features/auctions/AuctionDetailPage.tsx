@@ -580,7 +580,7 @@ export function AuctionDetailPage() {
                     +{formatKrw(minNextBid(currentPrice))}
                   </button>
                 </div>
-                <div className="flex items-center">
+                <div className="relative flex items-center">
                   <span className="absolute left-5 text-text-muted font-bold text-xl">
                     ₩
                   </span>
