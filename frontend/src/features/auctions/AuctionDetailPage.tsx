@@ -21,6 +21,16 @@ function minNextBid(current: number): number {
   return next > current ? next : current + 10;
 }
 
+/** 최소 입찰가: 최초 입찰(입찰 수 0)이면 등록가, 그 외에는 현재가 기준 10% 상승 */
+function getMinBid(
+  currentPrice: number,
+  startPrice: number,
+  bidCount: number
+): number {
+  if (bidCount === 0) return startPrice;
+  return minNextBid(currentPrice);
+}
+
 export function AuctionDetailPage() {
   const { auctionId } = useParams<{ auctionId: string }>();
   const id = Number(auctionId);
@@ -87,7 +97,9 @@ export function AuctionDetailPage() {
     auction?.currentPrice ??
     auction?.startPrice ??
     0;
+  const startPrice = auction?.startPrice ?? currentPrice;
   const bidCount = wsSnapshot.bidCount ?? auction?.bidCount ?? 0;
+  const minBid = getMinBid(currentPrice, startPrice, bidCount);
   const endAt = wsSnapshot.endAt ?? auction?.endAt;
   const status = wsSnapshot.status ?? auction?.status;
   const isMyAuction =
@@ -170,9 +182,9 @@ export function AuctionDetailPage() {
   const handleBid = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(bidAmount.replace(/,/g, ""));
-    if (!Number.isFinite(amount) || amount < minNextBid(currentPrice)) {
+    if (!Number.isFinite(amount) || amount < minBid) {
       addToast(
-        `최소 입찰가는 ${formatKrw(minNextBid(currentPrice))}입니다.`,
+        `최소 입찰가는 ${formatKrw(minBid)}입니다.`,
         "error"
       );
       return;
@@ -571,21 +583,17 @@ export function AuctionDetailPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() =>
-                      setBidAmount(String(minNextBid(currentPrice)))
-                    }
+                    onClick={() => setBidAmount(String(minBid))}
                     className="py-3 px-4 border border-border rounded-xl text-sm font-bold hover:border-primary hover:text-primary transition-all"
                   >
-                    +{formatKrw(minNextBid(currentPrice) - currentPrice)}
+                    {bidCount === 0 ? "등록가" : `+${formatKrw(minBid - currentPrice)}`}
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      setBidAmount(String(minNextBid(currentPrice) * 2))
-                    }
+                    onClick={() => setBidAmount(String(minBid * 2))}
                     className="py-3 px-4 border border-border rounded-xl text-sm font-bold hover:border-primary hover:text-primary transition-all"
                   >
-                    +{formatKrw(minNextBid(currentPrice))}
+                    +{formatKrw(minBid)}
                   </button>
                 </div>
                 <div className="relative flex items-center">
@@ -595,7 +603,7 @@ export function AuctionDetailPage() {
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder={String(minNextBid(currentPrice))}
+                    placeholder={String(minBid)}
                     value={bidAmount}
                     onChange={(e) =>
                       setBidAmount(e.target.value.replace(/\D/g, ""))
@@ -617,7 +625,7 @@ export function AuctionDetailPage() {
                 <p className="text-[11px] text-text-muted font-medium">
                   최소 입찰가:{" "}
                   <span className="font-bold text-text-main">
-                    {formatKrw(minNextBid(currentPrice))}
+                    {formatKrw(minBid)}
                   </span>
                 </p>
               </form>

@@ -17,6 +17,16 @@ function minNextBid(current: number): number {
   return next > current ? next : current + 10;
 }
 
+/** 최소 입찰가: 최초 입찰(입찰 수 0)이면 등록가, 그 외에는 현재가 기준 10% 상승 */
+function getMinBid(
+  currentPrice: number,
+  startPrice: number,
+  bidCount: number
+): number {
+  if (bidCount === 0) return startPrice;
+  return minNextBid(currentPrice);
+}
+
 export function AuctionLivePage() {
   const { id } = useParams<{ id: string }>();
   const auctionId = Number(id);
@@ -69,7 +79,9 @@ export function AuctionLivePage() {
     auction?.currentPrice ??
     auction?.startPrice ??
     0;
+  const startPrice = auction?.startPrice ?? currentPrice;
   const bidCount = wsSnapshot.bidCount ?? auction?.bidCount ?? 0;
+  const minBid = getMinBid(currentPrice, startPrice, bidCount);
   const endAt = wsSnapshot.endAt ?? auction?.endAt;
   const [remaining, setRemaining] = useState(0);
   useEffect(() => {
@@ -99,7 +111,7 @@ export function AuctionLivePage() {
   });
 
   const handleQuickBid = (delta: number) => {
-    const amount = minNextBid(currentPrice) + delta;
+    const amount = minBid + delta;
     if (!isAuth) {
       addToast("로그인이 필요합니다.", "error");
       return;
