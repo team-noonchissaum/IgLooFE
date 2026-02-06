@@ -21,6 +21,21 @@ api.interceptors.response.use(
   (res) => res,
   async (err: AxiosError<{ message?: string }>) => {
     const original = err.config;
+    
+    // 차단된 유저 감지 (403 또는 USER_BLOCKED 메시지)
+    if (
+      err.response?.status === 403 ||
+      (err.response?.data && 
+       typeof err.response.data === 'object' &&
+       (err.response.data as { message?: string }).message?.includes('차단'))
+    ) {
+      // 문의 페이지가 아닌 경우에만 리다이렉트
+      if (!window.location.pathname.includes('/inquiry')) {
+        window.location.href = '/inquiry';
+        return Promise.reject(err);
+      }
+    }
+    
     if (
       err.response?.status === 401 &&
       original &&

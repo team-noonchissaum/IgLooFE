@@ -19,6 +19,7 @@ import { AdminPage } from "@/features/admin/AdminPage";
 import { ChatPage } from "@/features/chat/ChatPage";
 import { OAuthCallbackPage } from "@/features/auth/OAuthCallbackPage";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { InquiryPage } from "@/features/inquiry/InquiryPage";
 
 function App() {
   return (
@@ -119,6 +120,7 @@ function App() {
             }
           />
           <Route path="login" element={<LoginPage />} />
+          <Route path="inquiry" element={<InquiryPage />} />
         </Route>
         <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

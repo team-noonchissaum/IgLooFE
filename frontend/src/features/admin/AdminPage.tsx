@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, unwrapData } from "@/lib/api";
+import { api, unwrapData, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Modal } from "@/components/ui/Modal";
 import { formatDateTime, formatKrw } from "@/lib/format";
+import { useToastStore } from "@/stores/toastStore";
 import type { PageResponse, AuctionRes, WithdrawalRes } from "@/lib/types";
 
 interface ReportItem {
@@ -45,6 +47,14 @@ interface BlockedUserItem {
   blockReason: string;
 }
 
+interface InquiryItem {
+  inquiryId: number;
+  email: string;
+  nickname: string;
+  content: string;
+  createdAt: string;
+}
+
 interface StatisticsData {
   date: string;
   transaction: {
@@ -67,12 +77,14 @@ interface StatisticsData {
 
 export function AdminPage() {
   const queryClient = useQueryClient();
+  const addToast = useToastStore((s) => s.add);
   const [activeTab, setActiveTab] = useState<
     | "reports"
     | "users"
     | "auctions"
     | "blockedAuctions"
     | "blockedUsers"
+    | "inquiries"
     | "withdrawals"
     | "stats"
   >("reports");
@@ -81,11 +93,16 @@ export function AdminPage() {
   const [auctionPage, setAuctionPage] = useState(0);
   const [blockedPage, setBlockedPage] = useState(0);
   const [blockedUsersPage, setBlockedUsersPage] = useState(0);
+  const [inquiryPage, setInquiryPage] = useState(0);
   const [withdrawalPage, setWithdrawalPage] = useState(0);
   const [statsDate, setStatsDate] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
   const [blockAuctionReasonMap, setBlockAuctionReasonMap] = useState<Map<number, string>>(new Map());
+  const [selectedUserReports, setSelectedUserReports] = useState<{
+    userId: number;
+    nickname: string;
+  } | null>(null);
 
   const { data: reportsPage, isLoading: reportsLoading } = useQuery({
     queryKey: ["admin", "reports", reportPage],
@@ -173,6 +190,23 @@ export function AdminPage() {
     enabled: activeTab === "stats",
   });
 
+  const { data: inquiriesPage, isLoading: inquiriesLoading } = useQuery({
+    queryKey: ["admin", "inquiries", inquiryPage],
+    queryFn: () =>
+      api
+        .get<{ message: string; data: PageResponse<InquiryItem> }>(
+          "/api/admin/inquiries",
+          {
+            params: {
+              page: inquiryPage,
+              size: 10,
+            },
+          }
+        )
+        .then(unwrapData),
+    enabled: activeTab === "inquiries",
+  });
+
   const { data: withdrawalsPage, isLoading: withdrawalsLoading } = useQuery({
     queryKey: ["admin", "withdrawals", withdrawalPage],
     queryFn: () =>
@@ -185,6 +219,23 @@ export function AdminPage() {
     enabled: activeTab === "withdrawals",
   });
 
+  const { data: userReports, isLoading: userReportsLoading } = useQuery({
+    queryKey: ["admin", "reports", "by-target", selectedUserReports?.userId],
+    queryFn: () =>
+      api
+        .get<{ message: string; data: ReportItem[] }>(
+          "/api/admin/reports/by-target",
+          {
+            params: {
+              targetType: "USER",
+              targetId: selectedUserReports!.userId,
+            },
+          }
+        )
+        .then(unwrapData),
+    enabled: selectedUserReports !== null,
+  });
+
   const blockUser = useMutation({
     mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
       api.patch(`/api/admin/users/${userId}/block`, { reason }),
@@ -192,12 +243,19 @@ export function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
   });
 
-  const unblockUser = useMutation({
-    mutationFn: (userId: number) =>
-      api.patch(`/api/admin/users/${userId}/unblock`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+  const unblockUserByNickname = useMutation({
+    mutationFn: (nickname: string) =>
+      api.patch(`/api/admin/users/unblock-by-nickname`, null, {
+        params: { nickname },
+      }),
+    onSuccess: (_, nickname) => {
+      // 차단 해제 요청 목록 새로고침 (백엔드에서 삭제되었으므로)
+      queryClient.invalidateQueries({ queryKey: ["admin", "inquiries"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "users", "blocked"] });
+      addToast("차단 해제가 완료되었습니다.", "success");
+    },
+    onError: (err) => {
+      addToast(getApiErrorMessage(err), "error");
     },
   });
 
@@ -222,6 +280,7 @@ export function AdminPage() {
   );
   const blockedAuctions = blockedPageData?.content ?? [];
   const blockedUsers = blockedUsersPageData?.content ?? [];
+  const inquiries = inquiriesPage?.content ?? [];
   const withdrawals = withdrawalsPage?.content ?? [];
 
   const blockAuction = useMutation({
@@ -326,6 +385,18 @@ export function AdminPage() {
           >
             <span className="material-symbols-outlined">person_off</span>
             차단된 유저
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("inquiries")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left w-full ${
+              activeTab === "inquiries"
+                ? "bg-primary text-white font-semibold"
+                : "text-text-muted hover:bg-gray-200"
+            }`}
+          >
+            <span className="material-symbols-outlined">contact_support</span>
+            차단 해제 요청
           </button>
           <button
             type="button"
@@ -459,7 +530,19 @@ export function AdminPage() {
                           {u.email ?? `#${u.userId}`}
                         </p>
                         <p className="text-xs text-text-muted">
-                          상태: {u.status} · 신고 {u.reportCount}건
+                          상태: {u.status} ·{" "}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedUserReports({
+                                userId: u.userId,
+                                nickname: u.nickname,
+                              })
+                            }
+                            className="text-primary hover:underline font-semibold"
+                          >
+                            신고 {u.reportCount}건
+                          </button>
                         </p>
                       </div>
                       <Button
@@ -671,14 +754,6 @@ export function AdminPage() {
                           차단 일시: {u.blockedAt} · 사유: {u.blockReason}
                         </p>
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => unblockUser.mutate(u.userId)}
-                        loading={unblockUser.isPending}
-                      >
-                        차단 해제
-                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -694,6 +769,72 @@ export function AdminPage() {
                       onClick={() =>
                         setBlockedUsersPage((p) => p + 1)
                       }
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      더 보기
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === "inquiries" && (
+          <div>
+            <h1 className="text-2xl font-bold text-text-main mb-6">
+              차단 해제 요청
+            </h1>
+            {inquiriesLoading ? (
+              <Skeleton className="h-64 w-full rounded-xl" />
+            ) : (
+              <div className="bg-white rounded-xl border border-border overflow-hidden">
+                <ul className="divide-y divide-border">
+                  {inquiries.map((inquiry) => (
+                    <li
+                      key={inquiry.inquiryId}
+                      className="p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium">
+                            요청 #{inquiry.inquiryId} - {inquiry.nickname}
+                          </p>
+                          <p className="text-sm text-text-muted mt-1">
+                            이메일: {inquiry.email}
+                          </p>
+                          <p className="text-sm text-text-muted mt-2 whitespace-pre-wrap">
+                            {inquiry.content}
+                          </p>
+                          <p className="text-xs text-text-muted mt-2">
+                            요청일: {formatDateTime(inquiry.createdAt)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`${inquiry.nickname}님의 차단을 해제하시겠습니까?`)) {
+                              unblockUserByNickname.mutate(inquiry.nickname);
+                            }
+                          }}
+                          loading={unblockUserByNickname.isPending}
+                        >
+                          차단 해제
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {inquiries.length === 0 && (
+                  <p className="p-8 text-center text-text-muted">
+                    차단 해제 요청이 없습니다.
+                  </p>
+                )}
+                {inquiriesPage && !inquiriesPage.last && (
+                  <div className="p-4 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setInquiryPage((p) => p + 1)}
                       className="text-primary font-semibold hover:underline"
                     >
                       더 보기
@@ -896,6 +1037,49 @@ export function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* 신고 목록 모달 */}
+      <Modal
+        open={selectedUserReports !== null}
+        onClose={() => setSelectedUserReports(null)}
+        title={`${selectedUserReports?.nickname}님의 신고 목록`}
+      >
+        {userReportsLoading ? (
+          <div className="py-8">
+            <Skeleton className="h-24 w-full mb-4" />
+            <Skeleton className="h-24 w-full mb-4" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : userReports && userReports.length > 0 ? (
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            {userReports.map((report) => (
+              <div
+                key={report.reportId}
+                className="p-4 border border-border rounded-xl bg-gray-50"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-semibold text-sm">
+                      신고 #{report.reportId}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      신고자: {report.reporterNickname} · 상태: {report.status}
+                    </p>
+                  </div>
+                  <span className="text-xs text-text-muted">
+                    {formatDateTime(report.createdAt)}
+                  </span>
+                </div>
+                <p className="text-sm text-text-main mt-2">{report.reason}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="py-8 text-center text-text-muted">
+            신고 내역이 없습니다.
+          </p>
+        )}
+      </Modal>
     </main>
   );
 }

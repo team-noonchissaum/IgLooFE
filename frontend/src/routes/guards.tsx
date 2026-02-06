@@ -6,17 +6,31 @@ import { useAuthStore } from "@/stores/authStore";
 import { userApi } from "@/services/userApi";
 import { Skeleton } from "@/components/ui/Skeleton";
 
-/** 로그인 필요: 미인증 시 / 로 이동 */
+/** 로그인 필요: 미인증 시 / 로 이동, 차단된 유저는 /inquiry로 이동 */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const location = useLocation();
+  
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => userApi.getProfile(),
+    enabled: isAuth,
+    retry: false,
+  });
+
   if (!isAuth) {
     return <Navigate to="/" state={{ from: location }} replace />;
   }
+
+  // 차단된 유저는 문의 페이지로만 이동 가능
+  if (profile?.status === "BLOCKED" && location.pathname !== "/inquiry") {
+    return <Navigate to="/inquiry" replace />;
+  }
+
   return <>{children}</>;
 }
 
-/** ADMIN 역할 필요: 미인증 시 / 로, 일반 유저 시 /me 로 이동 */
+/** ADMIN 역할 필요: 미인증 시 / 로, 일반 유저 시 /me 로 이동, 차단된 유저는 /inquiry로 이동 */
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const role = useAuthStore((s) => s.role);
@@ -35,6 +49,11 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (!isAuth) {
     return <Navigate to="/" state={{ from: location }} replace />;
+  }
+
+  // 차단된 유저는 문의 페이지로만 이동 가능
+  if (profile?.status === "BLOCKED" && location.pathname !== "/inquiry") {
+    return <Navigate to="/inquiry" replace />;
   }
 
   const resolvedRole = role ?? profile?.role;
