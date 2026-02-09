@@ -91,7 +91,7 @@ export function AuctionResultPage() {
     queryKey: ["order", "by-auction", auctionId],
     queryFn: () => orderApi.getByAuction(auctionId),
     enabled: isAuth && !!auction && needsOrder,
-    retry: (failureCount, error: any) => {
+    retry: (failureCount) => {
       // 404는 이미 null로 처리되므로 여기서는 다른 에러만 재시도
       return failureCount < 3;
     },
@@ -258,7 +258,7 @@ export function AuctionResultPage() {
                       : "주문이 생성되는 중입니다. 잠시만 기다려주세요. (자동으로 새로고침됩니다)"}
                   </p>
                 </div>
-              ) : order.deliveryType == null ? (
+              ) : order && order.deliveryType == null ? (
                 <>
                   {isWinner ? (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
@@ -312,7 +312,7 @@ export function AuctionResultPage() {
                     </div>
                   )}
                 </>
-              ) : (
+              ) : order ? (
                 <div className="flex flex-col sm:flex-row gap-4">
                   {order.deliveryType === "DIRECT" && order.roomId && (
                     <Button
@@ -336,7 +336,7 @@ export function AuctionResultPage() {
                     </Button>
                   </Link>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
           <div className="flex flex-wrap items-center justify-center gap-3">
