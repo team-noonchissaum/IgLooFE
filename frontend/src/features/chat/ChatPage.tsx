@@ -3,8 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { chatApi, type MyChatRoomRes } from "@/services/chatApi";
 import { userApi } from "@/services/userApi";
-import { getApiErrorMessage } from "@/lib/api";
-import { useToastStore } from "@/stores/toastStore";
 import { formatDateTime } from "@/lib/format";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useChatWebSocket } from "@/hooks/useChatWebSocket";
@@ -16,7 +14,6 @@ export function ChatPage() {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(() =>
     roomIdFromUrl ? Number(roomIdFromUrl) : null
   );
-  const addToast = useToastStore((s) => s.add);
 
   const { data: rooms = [], isLoading: roomsLoading } = useQuery({
     queryKey: ["chat", "rooms"],

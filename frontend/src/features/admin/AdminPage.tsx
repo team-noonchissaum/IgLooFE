@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, unwrapData, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
@@ -304,7 +304,7 @@ export function AdminPage() {
       api.patch(`/api/admin/users/unblock-by-nickname`, null, {
         params: { nickname },
       }),
-    onSuccess: (_, nickname) => {
+    onSuccess: () => {
       // 차단 해제 요청 목록 새로고침 (백엔드에서 삭제되었으므로)
       queryClient.invalidateQueries({ queryKey: ["admin", "inquiries"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "users", "blocked"] });

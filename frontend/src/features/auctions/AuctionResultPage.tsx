@@ -81,12 +81,28 @@ export function AuctionResultPage() {
     return highestBid.bidderNickname === profile.nickname;
   }, [isAuth, profile, auction, bidPage, bids, isSuccess, isEnded]);
 
-  const needsOrder = (isSuccess || isEnded) && (isWinner || isMyAuction);
-  const { data: order, isLoading: orderLoading } = useQuery({
+  // 주문은 SUCCESS 상태일 때만 조회 (ENDED 상태에서는 아직 주문이 생성되지 않음)
+  const needsOrder = isSuccess && (isWinner || isMyAuction);
+  const {
+    data: order,
+    isLoading: orderLoading,
+    error: orderError,
+  } = useQuery({
     queryKey: ["order", "by-auction", auctionId],
     queryFn: () => orderApi.getByAuction(auctionId),
     enabled: isAuth && !!auction && needsOrder,
-    retry: 3,
+    retry: (failureCount, error: any) => {
+      // 404는 이미 null로 처리되므로 여기서는 다른 에러만 재시도
+      return failureCount < 3;
+    },
+    retryDelay: 2000, // 2초마다 재시도
+    refetchInterval: (query) => {
+      // 주문이 없으면(null) 2초마다 재조회 (최대 20초)
+      if (query.state.data === null && query.state.fetchFailureCount < 10) {
+        return 2000;
+      }
+      return false;
+    },
   });
 
   if (isLoading || !auction) {
@@ -215,20 +231,39 @@ export function AuctionResultPage() {
             </div>
           </div>
           {((isSuccess || isEnded) && (isWinner || isMyAuction)) && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 border-t border-border pt-6">
+              <h2 className="text-lg font-bold text-text-main mb-2">거래 진행</h2>
               {orderLoading ? (
                 <div className="py-4">
                   <Skeleton className="h-24 w-full rounded-xl" />
                 </div>
-              ) : !order ? (
-                <p className="text-sm text-text-muted py-2">
-                  주문 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.
-                </p>
+              ) : orderError ? (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <p className="text-sm text-red-700 font-semibold">
+                    주문 정보를 불러오는 중 오류가 발생했습니다.
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">
+                    페이지를 새로고침하거나 잠시 후 다시 시도해주세요.
+                  </p>
+                </div>
+              ) : order === null ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <p className="text-sm text-blue-700 font-semibold mb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined animate-spin">sync</span>
+                    주문 정보를 준비 중입니다
+                  </p>
+                  <p className="text-xs text-blue-600">
+                    {isEnded && !isSuccess
+                      ? "경매가 종료되었습니다. 결과를 처리하는 중입니다. 최대 1분 정도 소요될 수 있습니다."
+                      : "주문이 생성되는 중입니다. 잠시만 기다려주세요. (자동으로 새로고침됩니다)"}
+                  </p>
+                </div>
               ) : order.deliveryType == null ? (
                 <>
                   {isWinner ? (
-                    <>
-                      <p className="text-sm font-semibold text-text-main">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+                      <p className="text-base font-bold text-text-main mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-yellow-600">info</span>
                         거래 방식을 선택해주세요
                       </p>
                       <div className="flex flex-col sm:flex-row gap-3">
@@ -267,11 +302,14 @@ export function AuctionResultPage() {
                           택배배송
                         </Button>
                       </div>
-                    </>
+                    </div>
                   ) : (
-                    <p className="text-sm text-text-muted py-2">
-                      구매자가 거래 방식을 선택할 때까지 기다려주세요.
-                    </p>
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                      <p className="text-sm text-text-muted flex items-center gap-2">
+                        <span className="material-symbols-outlined text-lg">hourglass_empty</span>
+                        구매자가 거래 방식을 선택할 때까지 기다려주세요.
+                      </p>
+                    </div>
                   )}
                 </>
               ) : (
