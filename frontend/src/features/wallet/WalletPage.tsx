@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { walletApi } from "@/services/walletApi";
 import { walletTransactionApi } from "@/services/walletTransactionApi";
 import { withdrawalApi } from "@/services/withdrawalApi";
-import { couponApi, type IssuedCoupon } from "@/services/couponApi";
+import { couponApi } from "@/services/couponApi";
 import { formatKrw, formatDateTime } from "@/lib/format";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";

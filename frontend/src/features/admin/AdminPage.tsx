@@ -1434,7 +1434,7 @@ export function AdminPage() {
             </div>
             {couponToEdit && (
               <Modal
-                isOpen={!!couponToEdit}
+                open={!!couponToEdit}
                 onClose={() => {
                   setCouponToEdit(null);
                   setNewCouponName("");
@@ -1513,7 +1513,7 @@ export function AdminPage() {
             )}
             {couponToDelete && (
               <Modal
-                isOpen={!!couponToDelete}
+                open={!!couponToDelete}
                 onClose={() => setCouponToDelete(null)}
                 title="쿠폰 삭제 확인"
               >
