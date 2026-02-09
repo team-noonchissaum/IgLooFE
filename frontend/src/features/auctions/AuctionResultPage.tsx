@@ -1,18 +1,38 @@
-import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
 import { auctionApi } from "@/services/auctionApi";
 import { bidApi } from "@/services/bidApi";
 import { userApi } from "@/services/userApi";
+import { orderApi } from "@/services/orderApi";
 import { formatKrw } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useMemo } from "react";
+import { getApiErrorMessage } from "@/lib/api";
+import { useToastStore } from "@/stores/toastStore";
 
 export function AuctionResultPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const addToast = useToastStore((s) => s.add);
   const auctionId = Number(id);
   const isAuth = useAuthStore((s) => s.isAuthenticated());
+
+  const chooseDeliveryType = useMutation({
+    mutationFn: ({ orderId, type }: { orderId: number; type: "DIRECT" | "SHIPMENT" }) =>
+      orderApi.chooseDeliveryType(orderId, type),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["order", "by-auction", auctionId] });
+      queryClient.invalidateQueries({ queryKey: ["chat", "rooms"] });
+      addToast(
+        res.deliveryType === "DIRECT" ? "직거래가 선택되었습니다." : "택배배송이 선택되었습니다.",
+        "success"
+      );
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
 
   const { data: auction, isLoading } = useQuery({
     queryKey: ["auction", auctionId],
@@ -60,6 +80,14 @@ export function AuctionResultPage() {
     );
     return highestBid.bidderNickname === profile.nickname;
   }, [isAuth, profile, auction, bidPage, bids, isSuccess, isEnded]);
+
+  const needsOrder = (isSuccess || isEnded) && (isWinner || isMyAuction);
+  const { data: order, isLoading: orderLoading } = useQuery({
+    queryKey: ["order", "by-auction", auctionId],
+    queryFn: () => orderApi.getByAuction(auctionId),
+    enabled: isAuth && !!auction && needsOrder,
+    retry: 3,
+  });
 
   if (isLoading || !auction) {
     return (
@@ -187,21 +215,90 @@ export function AuctionResultPage() {
             </div>
           </div>
           {((isSuccess || isEnded) && (isWinner || isMyAuction)) && (
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/chat" className="flex-1">
-                <Button variant="primary" className="w-full">
-                  <span className="material-symbols-outlined">chat</span>
-                  1:1 채팅
-                </Button>
-              </Link>
-              <Link to="/delivery" className="flex-1">
-                <Button variant="outline" className="w-full">
-                  <span className="material-symbols-outlined">
-                    local_shipping
-                  </span>
-                  배송 정보
-                </Button>
-              </Link>
+            <div className="flex flex-col gap-4">
+              {orderLoading ? (
+                <div className="py-4">
+                  <Skeleton className="h-24 w-full rounded-xl" />
+                </div>
+              ) : !order ? (
+                <p className="text-sm text-text-muted py-2">
+                  주문 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.
+                </p>
+              ) : order.deliveryType == null ? (
+                <>
+                  {isWinner ? (
+                    <>
+                      <p className="text-sm font-semibold text-text-main">
+                        거래 방식을 선택해주세요
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Button
+                          variant="primary"
+                          className="flex-1"
+                          onClick={() =>
+                            chooseDeliveryType.mutate({
+                              orderId: order.orderId,
+                              type: "DIRECT",
+                            })
+                          }
+                          loading={
+                            chooseDeliveryType.isPending &&
+                            chooseDeliveryType.variables?.type === "DIRECT"
+                          }
+                        >
+                          <span className="material-symbols-outlined">handshake</span>
+                          직거래
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() =>
+                            chooseDeliveryType.mutate({
+                              orderId: order.orderId,
+                              type: "SHIPMENT",
+                            })
+                          }
+                          loading={
+                            chooseDeliveryType.isPending &&
+                            chooseDeliveryType.variables?.type === "SHIPMENT"
+                          }
+                        >
+                          <span className="material-symbols-outlined">local_shipping</span>
+                          택배배송
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-text-muted py-2">
+                      구매자가 거래 방식을 선택할 때까지 기다려주세요.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {order.deliveryType === "DIRECT" && order.roomId && (
+                    <Button
+                      variant="primary"
+                      className="flex-1 w-full"
+                      onClick={() => navigate(`/chat?roomId=${order.roomId}`)}
+                    >
+                      <span className="material-symbols-outlined">chat</span>
+                      1:1 채팅
+                    </Button>
+                  )}
+                  <Link
+                    to={`/delivery?orderId=${order.orderId}&auctionId=${auctionId}`}
+                    className="flex-1"
+                  >
+                    <Button variant="outline" className="w-full">
+                      <span className="material-symbols-outlined">
+                        local_shipping
+                      </span>
+                      배송 정보
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
           <div className="flex flex-wrap items-center justify-center gap-3">

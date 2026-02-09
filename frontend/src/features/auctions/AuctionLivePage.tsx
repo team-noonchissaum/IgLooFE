@@ -71,7 +71,12 @@ export function AuctionLivePage() {
       setWsSnapshot((prev) =>
         Object.keys(data).length ? { ...prev, ...data } : prev
       ),
-    () => queryClient.invalidateQueries({ queryKey: ["bid", auctionId] })
+    (msg) => {
+      queryClient.invalidateQueries({ queryKey: ["auction", auctionId] });
+      if (msg.type === "BID_SUCCESSED") {
+        queryClient.invalidateQueries({ queryKey: ["bid", auctionId] });
+      }
+    }
   );
 
   const currentPrice =

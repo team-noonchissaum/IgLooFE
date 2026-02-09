@@ -4,6 +4,7 @@ import type {
   MyPageRes,
   ProfileUpdateUserReq,
   ProfileUpdateUserRes,
+  UserDeleteAttemptRes,
   PageResponse,
   AuctionRes,
 } from "@/lib/types";
@@ -34,6 +35,23 @@ export const userApi = {
       )
       .then(unwrapData),
 
+  /** 탈퇴 시도 (첫 클릭) - 잔액 있으면 환전 권장, 두 번째부터 포기 확인 */
+  attemptDelete: () =>
+    api
+      .post<{ message: string; data: UserDeleteAttemptRes }>(
+        "/api/users/me/delete-attempt"
+      )
+      .then(unwrapData),
+
+  /** 강제 탈퇴 (두 번째 클릭 후 확인) */
   deleteUser: () =>
     api.delete<{ message: string; data: null }>("/api/users/me/force"),
+
+  /** 다른 유저 프로필 조회 (닉네임 등) */
+  getUserProfile: (userId: number) =>
+    api
+      .get<{ message: string; data: { userId: number; nickname: string; profileUrl: string | null } }>(
+        `/api/users/${userId}`
+      )
+      .then(unwrapData),
 };

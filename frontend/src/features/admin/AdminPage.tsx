@@ -6,7 +6,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Modal } from "@/components/ui/Modal";
 import { formatDateTime, formatKrw } from "@/lib/format";
 import { useToastStore } from "@/stores/toastStore";
-import type { PageResponse, AuctionRes, WithdrawalRes } from "@/lib/types";
+import { categoryApi } from "@/services/categoryApi";
+import type { PageResponse, AuctionRes, WithdrawalRes, Category } from "@/lib/types";
 
 interface ReportItem {
   reportId: number;
@@ -55,6 +56,51 @@ interface InquiryItem {
   createdAt: string;
 }
 
+interface CategoryTreeNodeType extends Category {
+  children: CategoryTreeNodeType[];
+}
+
+function CategoryTreeNode({
+  node,
+  depth,
+  onDelete,
+}: {
+  node: CategoryTreeNodeType;
+  depth: number;
+  onDelete: (cat: Category) => void;
+}) {
+  const paddingLeft = depth * 24;
+  const canDelete = node.name !== "기타";
+
+  return (
+    <>
+      <li
+        className="flex items-center justify-between gap-3 p-3 hover:bg-gray-50"
+        style={{ paddingLeft: paddingLeft + 12 }}
+      >
+        <span className="font-medium">{node.name}</span>
+        {canDelete && (
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => onDelete(node)}
+          >
+            삭제
+          </Button>
+        )}
+      </li>
+      {node.children.map((child) => (
+        <CategoryTreeNode
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          onDelete={onDelete}
+        />
+      ))}
+    </>
+  );
+}
+
 interface StatisticsData {
   date: string;
   transaction: {
@@ -86,6 +132,7 @@ export function AdminPage() {
     | "blockedUsers"
     | "inquiries"
     | "withdrawals"
+    | "categories"
     | "stats"
   >("reports");
   const [reportPage, setReportPage] = useState(0);
@@ -103,6 +150,9 @@ export function AdminPage() {
     userId: number;
     nickname: string;
   } | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   const { data: reportsPage, isLoading: reportsLoading } = useQuery({
     queryKey: ["admin", "reports", reportPage],
@@ -219,6 +269,12 @@ export function AdminPage() {
     enabled: activeTab === "withdrawals",
   });
 
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => categoryApi.list(),
+    enabled: activeTab === "categories",
+  });
+
   const { data: userReports, isLoading: userReportsLoading } = useQuery({
     queryKey: ["admin", "reports", "by-target", selectedUserReports?.userId],
     queryFn: () =>
@@ -318,6 +374,47 @@ export function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["admin", "withdrawals"] }),
   });
 
+  const addCategory = useMutation({
+    mutationFn: (body: { parentId: number | null; name: string }) =>
+      categoryApi.add(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      addToast("카테고리가 추가되었습니다.", "success");
+      setNewCategoryName("");
+      setNewCategoryParentId(null);
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: (categoryId: number) => categoryApi.delete(categoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      addToast("카테고리가 삭제되었습니다.", "success");
+      setCategoryToDelete(null);
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  /** 평면 목록을 부모-자식 트리로 변환 */
+  const categoryTree: CategoryTreeNodeType[] = (() => {
+    const byId = new Map<number, CategoryTreeNodeType>();
+    categories.forEach((c) => {
+      byId.set(c.id, { ...c, children: [] });
+    });
+    const roots: CategoryTreeNodeType[] = [];
+    byId.forEach((node) => {
+      if (node.parentId == null) {
+        roots.push(node);
+      } else {
+        const parent = byId.get(node.parentId);
+        if (parent) parent.children.push(node);
+        else roots.push(node);
+      }
+    });
+    return roots;
+  })();
+
   return (
     <main className="flex min-h-[80vh]">
       <aside className="w-64 shrink-0 border-r border-border bg-gray-50 p-6 hidden md:block">
@@ -409,6 +506,18 @@ export function AdminPage() {
           >
             <span className="material-symbols-outlined">payments</span>
             출금 승인/반려
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("categories")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left w-full ${
+              activeTab === "categories"
+                ? "bg-primary text-white font-semibold"
+                : "text-text-muted hover:bg-gray-200"
+            }`}
+          >
+            <span className="material-symbols-outlined">category</span>
+            카테고리 관리
           </button>
           <button
             type="button"
@@ -925,6 +1034,98 @@ export function AdminPage() {
             )}
           </div>
         )}
+        {activeTab === "categories" && (
+          <div>
+            <h1 className="text-2xl font-bold text-text-main mb-6">
+              카테고리 관리
+            </h1>
+            <div className="bg-white rounded-xl border border-border p-6 shadow-sm mb-6">
+              <h2 className="text-lg font-semibold text-text-main mb-4">
+                카테고리 추가
+              </h2>
+              <form
+                className="flex flex-wrap gap-3 items-end"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const name = newCategoryName.trim();
+                  if (!name) {
+                    addToast("카테고리 이름을 입력하세요.", "error");
+                    return;
+                  }
+                  addCategory.mutate({
+                    parentId: newCategoryParentId,
+                    name,
+                  });
+                }}
+              >
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-1">
+                    부모 카테고리
+                  </label>
+                  <select
+                    value={newCategoryParentId ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setNewCategoryParentId(
+                        v === "" ? null : Number(v)
+                      );
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    <option value="">최상위 (루트)</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-1">
+                    카테고리 이름
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="카테고리 이름"
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  loading={addCategory.isPending}
+                >
+                  추가
+                </Button>
+              </form>
+            </div>
+            <div className="bg-white rounded-xl border border-border overflow-hidden">
+              <h2 className="text-lg font-semibold text-text-main p-4 border-b border-border">
+                카테고리 목록
+              </h2>
+              {categoriesLoading ? (
+                <Skeleton className="h-48 w-full rounded-none" />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {categoryTree.map((node) => (
+                    <CategoryTreeNode
+                      key={node.id}
+                      node={node}
+                      depth={0}
+                      onDelete={(cat) => setCategoryToDelete(cat)}
+                    />
+                  ))}
+                </ul>
+              )}
+              {!categoriesLoading && categoryTree.length === 0 && (
+                <p className="p-8 text-center text-text-muted">
+                  등록된 카테고리가 없습니다.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         {activeTab === "stats" && (
           <div>
             <h1 className="text-2xl font-bold text-text-main mb-6">
@@ -1078,6 +1279,37 @@ export function AdminPage() {
           <p className="py-8 text-center text-text-muted">
             신고 내역이 없습니다.
           </p>
+        )}
+      </Modal>
+
+      {/* 카테고리 삭제 확인 모달 */}
+      <Modal
+        open={categoryToDelete !== null}
+        onClose={() => setCategoryToDelete(null)}
+        title="카테고리 삭제"
+      >
+        {categoryToDelete && (
+          <>
+            <p className="text-sm text-text-muted mb-4">
+              이 카테고리와 하위 카테고리의 상품은 &quot;기타&quot;로 이동합니다.
+              삭제하시겠습니까?
+            </p>
+            <p className="text-sm font-semibold text-text-main mb-4">
+              삭제 대상: {categoryToDelete.name}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => setCategoryToDelete(null)}>
+                취소
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => deleteCategory.mutate(categoryToDelete.id)}
+                loading={deleteCategory.isPending}
+              >
+                삭제
+              </Button>
+            </div>
+          </>
         )}
       </Modal>
     </main>

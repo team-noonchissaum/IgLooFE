@@ -1,16 +1,26 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { inquiryApi } from "@/services/inquiryApi";
+import { userApi } from "@/services/userApi";
+import { useAuthStore } from "@/stores/authStore";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 
 export function InquiryPage() {
   const addToast = useToastStore((s) => s.add);
+  const isAuth = useAuthStore((s) => s.isAuthenticated());
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [content, setContent] = useState("");
   const [submitted, setSubmitted] = useState(false);
+
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => userApi.getProfile(),
+    enabled: isAuth,
+    retry: false,
+  });
 
   const submitInquiry = useMutation({
     mutationFn: (data: { email: string; nickname: string; content: string }) =>
@@ -74,6 +84,16 @@ export function InquiryPage() {
         <p className="text-text-muted">
           계정이 차단된 경우, 아래 양식을 작성하여 차단 해제를 요청하실 수 있습니다.
         </p>
+        {profile?.status === "BLOCKED" && profile?.blockReason && (
+          <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+            <p className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">
+              차단 사유
+            </p>
+            <p className="text-sm text-red-700 dark:text-red-300">
+              {profile.blockReason}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-border rounded-2xl p-8">

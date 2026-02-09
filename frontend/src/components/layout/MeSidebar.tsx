@@ -120,6 +120,17 @@ export function MeSidebar() {
           <span className="material-symbols-outlined">pending_actions</span>
           충전대기 목록 보기
         </Link>
+        <Link
+          to="/chat"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+            isActive("/chat")
+              ? "bg-primary text-white font-semibold"
+              : "hover:bg-gray-100 text-text-main font-medium"
+          }`}
+        >
+          <span className="material-symbols-outlined">chat</span>
+          채팅 내역
+        </Link>
       </nav>
     </aside>
   );

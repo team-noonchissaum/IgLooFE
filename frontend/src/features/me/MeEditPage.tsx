@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
 import { userApi } from "@/services/userApi";
@@ -19,10 +20,14 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+type DeleteStep = "idle" | "warn_first" | "confirm_required";
+
 export function MeEditPage() {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.add);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>("idle");
+  const [attemptMessage, setAttemptMessage] = useState<string>("");
 
   const { data: user } = useQuery({
     queryKey: ["users", "me"],
@@ -54,6 +59,20 @@ export function MeEditPage() {
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
+  const attemptDelete = useMutation({
+    mutationFn: () => userApi.attemptDelete(),
+    onSuccess: (res) => {
+      if (res.action === "WARN_FIRST") {
+        setDeleteStep("warn_first");
+        setAttemptMessage(res.message);
+      } else if (res.action === "CONFIRM_REQUIRED") {
+        setDeleteStep("confirm_required");
+        setAttemptMessage(res.message);
+      }
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
   const deleteAccount = useMutation({
     mutationFn: () => userApi.deleteUser(),
     onSuccess: () => {
@@ -62,6 +81,12 @@ export function MeEditPage() {
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteStep("idle");
+    setAttemptMessage("");
+  };
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadProfileImage = useMutation({
@@ -154,24 +179,61 @@ export function MeEditPage() {
       </div>
       <Modal
         open={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={closeDeleteModal}
         title="회원 탈퇴"
       >
-        <p className="text-sm text-text-muted mb-4">
-          정말 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-        </p>
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-            취소
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => deleteAccount.mutate()}
-            loading={deleteAccount.isPending}
-          >
-            탈퇴
-          </Button>
-        </div>
+        {deleteStep === "idle" && (
+          <>
+            <p className="text-sm text-text-muted mb-4">
+              탈퇴 시 모든 데이터가 삭제되며 복구할 수 없습니다. 잔액이 있으면
+              환전 후 탈퇴할 수 있습니다.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={closeDeleteModal}>
+                취소
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => attemptDelete.mutate()}
+                loading={attemptDelete.isPending}
+              >
+                탈퇴 시도
+              </Button>
+            </div>
+          </>
+        )}
+        {deleteStep === "warn_first" && (
+          <>
+            <p className="text-sm text-text-muted mb-4">{attemptMessage}</p>
+            <div className="flex gap-2 justify-end">
+              <Link to="/wallet">
+                <Button variant="primary" onClick={closeDeleteModal}>
+                  환전하기
+                </Button>
+              </Link>
+              <Button variant="secondary" onClick={closeDeleteModal}>
+                취소
+              </Button>
+            </div>
+          </>
+        )}
+        {deleteStep === "confirm_required" && (
+          <>
+            <p className="text-sm text-text-muted mb-4">{attemptMessage}</p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={closeDeleteModal}>
+                취소
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => deleteAccount.mutate()}
+                loading={deleteAccount.isPending}
+              >
+                탈퇴 확정
+              </Button>
+            </div>
+          </>
+        )}
       </Modal>
         </section>
       </div>

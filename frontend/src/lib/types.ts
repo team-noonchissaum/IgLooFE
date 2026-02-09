@@ -255,6 +255,7 @@ export interface ProfileRes {
   email: string;
   role: string;
   status: string;
+  blockReason?: string | null;
 }
 
 /** 마이페이지 - GET /api/mypage → MyPageRes */
@@ -270,6 +271,13 @@ export interface MyPageRes {
 export interface ProfileUpdateUserReq {
   nickname: string;
   profileUrl?: string | null;
+}
+
+/** 탈퇴 시도 응답 - POST /api/users/me/delete-attempt */
+export interface UserDeleteAttemptRes {
+  action: "WARN_FIRST" | "CONFIRM_REQUIRED" | "DELETED";
+  balance: number;
+  message: string;
 }
 
 /** 프로필 수정 응답 */

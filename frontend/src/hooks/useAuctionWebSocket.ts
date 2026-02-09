@@ -11,6 +11,8 @@ export interface AuctionSnapshot {
   endAt?: string;
   status?: string;
   topBidderNickname?: string;
+  currentBidderId?: number | null;
+  isExtended?: boolean;
 }
 
 export type AuctionWsMessage =
@@ -64,17 +66,22 @@ export function useAuctionWebSocket(
                 };
               };
               onMessageRef.current?.(msg);
-              // 입찰 성공/연장 시 payload로 스냅샷 갱신 → 모든 시청자 화면에 최고가 즉시 반영
+              // 입찰 성공/롤백 시 payload로 스냅샷 갱신 → 모든 시청자 화면에 최고가 즉시 반영
               if (msg.type === "BID_SUCCESSED" && msg.payload) {
                 const p = msg.payload as {
                   currentPrice?: number;
                   bidCount?: number;
                   endAt?: string;
+                  currentBidderId?: number | null;
+                  isExtended?: boolean;
                 };
                 const patch: AuctionSnapshot = {};
                 if (p.currentPrice != null) patch.currentPrice = p.currentPrice;
                 if (p.bidCount != null) patch.bidCount = p.bidCount;
                 if (p.endAt != null) patch.endAt = String(p.endAt);
+                if (p.currentBidderId !== undefined) patch.currentBidderId = p.currentBidderId;
+                if (p.currentBidderId === null) patch.topBidderNickname = undefined;
+                if (p.isExtended !== undefined) patch.isExtended = p.isExtended;
                 if (Object.keys(patch).length > 0) onSnapshotRef.current(patch);
               }
               if (msg.type === "AUCTION_EXTENDED" && msg.payload) {
