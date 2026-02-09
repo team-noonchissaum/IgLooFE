@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { formatDateTime, formatKrw } from "@/lib/format";
 import { useToastStore } from "@/stores/toastStore";
 import { categoryApi } from "@/services/categoryApi";
+import { couponApi, type Coupon, type CouponIssueReq } from "@/services/couponApi";
 import type { PageResponse, AuctionRes, WithdrawalRes, Category } from "@/lib/types";
 
 interface ReportItem {
@@ -133,6 +134,8 @@ export function AdminPage() {
     | "inquiries"
     | "withdrawals"
     | "categories"
+    | "coupons"
+    | "couponDef"
     | "stats"
   >("reports");
   const [reportPage, setReportPage] = useState(0);
@@ -153,6 +156,13 @@ export function AdminPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [couponReason, setCouponReason] = useState("");
+  const [newCouponName, setNewCouponName] = useState("");
+  const [newCouponAmount, setNewCouponAmount] = useState("");
+  const [couponToEdit, setCouponToEdit] = useState<Coupon | null>(null);
+  const [couponToDelete, setCouponToDelete] = useState<Coupon | null>(null);
 
   const { data: reportsPage, isLoading: reportsLoading } = useQuery({
     queryKey: ["admin", "reports", reportPage],
@@ -275,6 +285,12 @@ export function AdminPage() {
     enabled: activeTab === "categories",
   });
 
+  const { data: coupons = [], isLoading: couponsLoading } = useQuery({
+    queryKey: ["coupons"],
+    queryFn: () => couponApi.getAllCoupons(),
+    enabled: activeTab === "coupons" || activeTab === "couponDef",
+  });
+
   const { data: userReports, isLoading: userReportsLoading } = useQuery({
     queryKey: ["admin", "reports", "by-target", selectedUserReports?.userId],
     queryFn: () =>
@@ -392,6 +408,50 @@ export function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       addToast("카테고리가 삭제되었습니다.", "success");
       setCategoryToDelete(null);
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const issueCoupon = useMutation({
+    mutationFn: (body: CouponIssueReq) => couponApi.issueCoupon(body),
+    onSuccess: () => {
+      addToast("쿠폰이 발급되었습니다.", "success");
+      setSelectedCouponId(null);
+      setSelectedUserIds([]);
+      setCouponReason("");
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const createCoupon = useMutation({
+    mutationFn: (body: { name: string; amount: number }) =>
+      couponApi.createCoupon(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["coupons"] });
+      addToast("쿠폰이 생성되었습니다.", "success");
+      setNewCouponName("");
+      setNewCouponAmount("");
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const updateCoupon = useMutation({
+    mutationFn: ({ couponId, body }: { couponId: number; body: { name: string; amount: number } }) =>
+      couponApi.updateCoupon(couponId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["coupons"] });
+      addToast("쿠폰이 수정되었습니다.", "success");
+      setCouponToEdit(null);
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const deleteCoupon = useMutation({
+    mutationFn: (couponId: number) => couponApi.deleteCoupon(couponId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["coupons"] });
+      addToast("쿠폰이 삭제되었습니다.", "success");
+      setCouponToDelete(null);
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -518,6 +578,30 @@ export function AdminPage() {
           >
             <span className="material-symbols-outlined">category</span>
             카테고리 관리
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("couponDef")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left w-full ${
+              activeTab === "couponDef"
+                ? "bg-primary text-white font-semibold"
+                : "text-text-muted hover:bg-gray-200"
+            }`}
+          >
+            <span className="material-symbols-outlined">confirmation_number</span>
+            쿠폰 관리
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("coupons")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left w-full ${
+              activeTab === "coupons"
+                ? "bg-primary text-white font-semibold"
+                : "text-text-muted hover:bg-gray-200"
+            }`}
+          >
+            <span className="material-symbols-outlined">send</span>
+            쿠폰 발급
           </button>
           <button
             type="button"
@@ -1124,6 +1208,344 @@ export function AdminPage() {
                 </p>
               )}
             </div>
+          </div>
+        )}
+        {activeTab === "coupons" && (
+          <div className="space-y-6">
+            <h1 className="text-2xl font-bold text-text-main">쿠폰 발급</h1>
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h2 className="text-lg font-semibold text-text-main mb-4">쿠폰 발급</h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!selectedCouponId || selectedUserIds.length === 0 || !couponReason.trim()) {
+                    addToast("쿠폰, 사용자, 사유를 모두 입력해주세요.", "error");
+                    return;
+                  }
+                  issueCoupon.mutate({
+                    couponId: selectedCouponId,
+                    userIds: selectedUserIds,
+                    reason: couponReason.trim(),
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    쿠폰 선택
+                  </label>
+                  {couponsLoading ? (
+                    <Skeleton className="h-10 w-full rounded-lg" />
+                  ) : (
+                    <select
+                      value={selectedCouponId ?? ""}
+                      onChange={(e) =>
+                        setSelectedCouponId(e.target.value ? Number(e.target.value) : null)
+                      }
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      required
+                    >
+                      <option value="">쿠폰을 선택하세요</option>
+                      {coupons.map((coupon) => (
+                        <option key={coupon.couponId} value={coupon.couponId}>
+                          {coupon.name} - {formatKrw(coupon.amount)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    발급 대상 사용자 선택
+                  </label>
+                  <div className="border border-border rounded-lg p-4 max-h-64 overflow-y-auto">
+                    {usersLoading ? (
+                      <Skeleton className="h-24 w-full rounded-lg" />
+                    ) : (
+                      <div className="space-y-2">
+                        {usersPage?.content.map((user) => (
+                          <label
+                            key={user.userId}
+                            className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedUserIds.includes(user.userId)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedUserIds([...selectedUserIds, user.userId]);
+                                } else {
+                                  setSelectedUserIds(
+                                    selectedUserIds.filter((id) => id !== user.userId)
+                                  );
+                                }
+                              }}
+                              className="w-4 h-4 text-primary rounded"
+                            />
+                            <span className="text-sm">
+                              {user.nickname} ({user.email || "이메일 없음"})
+                            </span>
+                          </label>
+                        ))}
+                        {usersPage && usersPage.content.length === 0 && (
+                          <p className="text-sm text-text-muted text-center py-4">
+                            사용자가 없습니다.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedUserIds.length > 0 && (
+                    <p className="text-xs text-text-muted mt-2">
+                      {selectedUserIds.length}명 선택됨
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    발급 사유
+                  </label>
+                  <textarea
+                    value={couponReason}
+                    onChange={(e) => setCouponReason(e.target.value)}
+                    placeholder="쿠폰 발급 사유를 입력하세요"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm min-h-[80px]"
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full"
+                  loading={issueCoupon.isPending}
+                >
+                  쿠폰 발급
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
+        {activeTab === "couponDef" && (
+          <div className="space-y-6">
+            <h1 className="text-2xl font-bold text-text-main">쿠폰 관리</h1>
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h2 className="text-lg font-semibold text-text-main mb-4">쿠폰 생성</h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const amount = Number(newCouponAmount.replace(/\D/g, ""));
+                  if (!newCouponName.trim() || amount <= 0) {
+                    addToast("쿠폰 이름과 금액을 입력해주세요.", "error");
+                    return;
+                  }
+                  createCoupon.mutate({
+                    name: newCouponName.trim(),
+                    amount: amount,
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    쿠폰 이름
+                  </label>
+                  <input
+                    type="text"
+                    value={newCouponName}
+                    onChange={(e) => setNewCouponName(e.target.value)}
+                    placeholder="예: 신규 가입 축하 쿠폰"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-muted mb-2">
+                    쿠폰 금액 (원)
+                  </label>
+                  <input
+                    type="text"
+                    value={newCouponAmount}
+                    onChange={(e) =>
+                      setNewCouponAmount(e.target.value.replace(/\D/g, ""))
+                    }
+                    placeholder="10000"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full"
+                  loading={createCoupon.isPending}
+                >
+                  쿠폰 생성
+                </Button>
+              </form>
+            </div>
+            <div className="bg-white rounded-xl border border-border overflow-hidden">
+              <h2 className="text-lg font-semibold text-text-main p-4 border-b border-border">
+                쿠폰 목록
+              </h2>
+              {couponsLoading ? (
+                <Skeleton className="h-48 w-full rounded-none" />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {coupons.map((coupon) => (
+                    <li
+                      key={coupon.couponId}
+                      className="p-4 flex items-center justify-between hover:bg-gray-50"
+                    >
+                      <div>
+                        <p className="font-semibold text-text-main">{coupon.name}</p>
+                        <p className="text-sm text-text-muted">
+                          {formatKrw(coupon.amount)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCouponToEdit(coupon);
+                            setNewCouponName(coupon.name);
+                            setNewCouponAmount(coupon.amount.toString());
+                          }}
+                        >
+                          수정
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setCouponToDelete(coupon)}
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!couponsLoading && coupons.length === 0 && (
+                <p className="p-8 text-center text-text-muted">
+                  등록된 쿠폰이 없습니다.
+                </p>
+              )}
+            </div>
+            {couponToEdit && (
+              <Modal
+                isOpen={!!couponToEdit}
+                onClose={() => {
+                  setCouponToEdit(null);
+                  setNewCouponName("");
+                  setNewCouponAmount("");
+                }}
+                title="쿠폰 수정"
+              >
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const amount = Number(newCouponAmount.replace(/\D/g, ""));
+                    if (!newCouponName.trim() || amount <= 0) {
+                      addToast("쿠폰 이름과 금액을 입력해주세요.", "error");
+                      return;
+                    }
+                    updateCoupon.mutate({
+                      couponId: couponToEdit.couponId,
+                      body: {
+                        name: newCouponName.trim(),
+                        amount: amount,
+                      },
+                    });
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-text-muted mb-2">
+                      쿠폰 이름
+                    </label>
+                    <input
+                      type="text"
+                      value={newCouponName}
+                      onChange={(e) => setNewCouponName(e.target.value)}
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-muted mb-2">
+                      쿠폰 금액 (원)
+                    </label>
+                    <input
+                      type="text"
+                      value={newCouponAmount}
+                      onChange={(e) =>
+                        setNewCouponAmount(e.target.value.replace(/\D/g, ""))
+                      }
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setCouponToEdit(null);
+                        setNewCouponName("");
+                        setNewCouponAmount("");
+                      }}
+                    >
+                      취소
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      className="flex-1"
+                      loading={updateCoupon.isPending}
+                    >
+                      수정
+                    </Button>
+                  </div>
+                </form>
+              </Modal>
+            )}
+            {couponToDelete && (
+              <Modal
+                isOpen={!!couponToDelete}
+                onClose={() => setCouponToDelete(null)}
+                title="쿠폰 삭제 확인"
+              >
+                <div className="space-y-4">
+                  <p className="text-text-main">
+                    정말로 <strong>{couponToDelete.name}</strong> 쿠폰을 삭제하시겠습니까?
+                  </p>
+                  <p className="text-sm text-text-muted">
+                    삭제된 쿠폰은 복구할 수 없습니다.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setCouponToDelete(null)}
+                    >
+                      취소
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="flex-1"
+                      onClick={() => {
+                        deleteCoupon.mutate(couponToDelete.couponId);
+                      }}
+                      loading={deleteCoupon.isPending}
+                    >
+                      삭제
+                    </Button>
+                  </div>
+                </div>
+              </Modal>
+            )}
           </div>
         )}
         {activeTab === "stats" && (

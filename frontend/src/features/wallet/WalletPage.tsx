@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { walletApi } from "@/services/walletApi";
 import { walletTransactionApi } from "@/services/walletTransactionApi";
 import { withdrawalApi } from "@/services/withdrawalApi";
+import { couponApi, type IssuedCoupon } from "@/services/couponApi";
 import { formatKrw, formatDateTime } from "@/lib/format";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
@@ -29,6 +30,11 @@ export function WalletPage() {
     queryFn: () => walletTransactionApi.getMe({ page, size: 20 }),
   });
 
+  const { data: issuedCoupons = [], isLoading: couponsLoading } = useQuery({
+    queryKey: ["coupons", "issued"],
+    queryFn: () => couponApi.getIssuedCoupons(),
+  });
+
   const withdrawMutation = useMutation({
     mutationFn: () =>
       withdrawalApi.request({
@@ -43,6 +49,17 @@ export function WalletPage() {
       setAccountNumber("");
       queryClient.invalidateQueries({ queryKey: ["wallet", "me"] });
       queryClient.invalidateQueries({ queryKey: ["withdrawals", "me"] });
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  const useCouponMutation = useMutation({
+    mutationFn: (issuedCouponId: number) => couponApi.useCoupon(issuedCouponId),
+    onSuccess: () => {
+      addToast("쿠폰이 사용되었습니다. 지갑에 충전되었습니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["wallet", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["wallet_transactions", "me"] });
+      queryClient.invalidateQueries({ queryKey: ["coupons", "issued"] });
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -186,6 +203,73 @@ export function WalletPage() {
               <p className="text-xs text-text-muted mt-2">
                 최소 10,000원, 수수료 1,000원
               </p>
+            </div>
+
+            <div className="bg-white rounded-xl border border-border p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-text-main mb-4">보유 쿠폰</h2>
+              {couponsLoading ? (
+                <Skeleton className="h-32 rounded-xl" />
+              ) : issuedCoupons.length === 0 ? (
+                <p className="text-text-muted text-center py-8">
+                  보유한 쿠폰이 없습니다.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {issuedCoupons.map((coupon) => {
+                    const expirationDate = new Date(coupon.expiration);
+                    const isExpired = expirationDate < new Date();
+                    const canUse = !isExpired;
+
+                    return (
+                      <div
+                        key={coupon.issuedCouponId}
+                        className={`flex items-center justify-between p-4 rounded-lg border ${
+                          isExpired
+                            ? "bg-gray-50 border-gray-200"
+                            : "bg-yellow-50 border-yellow-200"
+                        }`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="material-symbols-outlined text-yellow-600">
+                              confirmation_number
+                            </span>
+                            <p className="font-semibold text-text-main">
+                              {formatKrw(coupon.amount)} 쿠폰
+                            </p>
+                            {isExpired && (
+                              <span className="text-xs text-red-500 font-medium">만료됨</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-text-muted mb-1">{coupon.reason}</p>
+                          <p className="text-xs text-text-muted">
+                            만료일: {new Date(coupon.expiration).toLocaleDateString("ko-KR")}
+                          </p>
+                        </div>
+                        <Button
+                          variant={canUse ? "primary" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            if (canUse) {
+                              if (
+                                confirm(
+                                  `${formatKrw(coupon.amount)} 쿠폰을 사용하시겠습니까?`
+                                )
+                              ) {
+                                useCouponMutation.mutate(coupon.issuedCouponId);
+                              }
+                            }
+                          }}
+                          disabled={!canUse || useCouponMutation.isPending}
+                          loading={useCouponMutation.isPending}
+                        >
+                          {canUse ? "사용하기" : "만료됨"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-xl border border-border overflow-hidden shadow-sm">
