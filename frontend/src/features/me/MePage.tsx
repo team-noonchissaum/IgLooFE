@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { userApi } from "@/services/userApi";
@@ -8,7 +9,11 @@ import { MeSidebar } from "@/components/layout/MeSidebar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 
+const MY_AUCTIONS_PAGE_SIZE = 5;
+
 export function MePage() {
+  const [myAuctionPage, setMyAuctionPage] = useState(0);
+
   const { data: mypage, isLoading } = useQuery({
     queryKey: ["users", "me", "mypage"],
     queryFn: () => userApi.getMypage(),
@@ -26,10 +31,13 @@ export function MePage() {
   const myBids = myBidsPage?.content ?? [];
 
   const { data: myAuctionsPage } = useQuery({
-    queryKey: ["users", "me", "auctions"],
-    queryFn: () => userApi.getMyAuctions(),
+    queryKey: ["users", "me", "auctions", myAuctionPage],
+    queryFn: () =>
+      userApi.getMyAuctions({ page: myAuctionPage, size: MY_AUCTIONS_PAGE_SIZE }),
   });
   const myAuctions = myAuctionsPage?.content ?? [];
+  const myAuctionsLast = myAuctionsPage?.last ?? true;
+  const myAuctionsTotalPages = myAuctionsPage?.totalPages ?? 0;
 
   const balance = mypage?.balance ?? wallet?.balance ?? 0;
 
@@ -131,44 +139,69 @@ export function MePage() {
                   등록한 경매가 없습니다.
                 </li>
               ) : (
-                myAuctions.slice(0, 10).map((a) => {
-                  const isEnded = a.status === "SUCCESS" || 
-                                  a.status === "FAILED" || 
-                                  a.status === "ENDED";
-                  return (
-                    <li
-                      key={a.auctionId}
-                      className="py-3 flex flex-col gap-2"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div>
-                          <Link
-                            to={`/auctions/${a.auctionId}`}
-                            className="text-primary hover:underline font-medium"
-                          >
-                            {a.title}
+                <>
+                  {myAuctions.map((a) => {
+                    const isEnded = a.status === "SUCCESS" || 
+                                    a.status === "FAILED" || 
+                                    a.status === "ENDED";
+                    return (
+                      <li
+                        key={a.auctionId}
+                        className="py-3 flex flex-col gap-2"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <div>
+                            <Link
+                              to={`/auctions/${a.auctionId}`}
+                              className="text-primary hover:underline font-medium"
+                            >
+                              {a.title}
+                            </Link>
+                            <p className="text-xs text-text-muted">
+                              종료: {formatDateTime(a.endAt)}
+                            </p>
+                          </div>
+                          <div className="text-sm text-text-main font-semibold">
+                            {formatKrw(a.currentPrice)}
+                            <span className="text-xs text-text-muted ml-2">
+                              {a.status}
+                            </span>
+                          </div>
+                        </div>
+                        {isEnded && (
+                          <Link to={`/auctions/${a.auctionId}/result`} className="self-start">
+                            <Button variant="outline" size="sm">
+                              경매 결과 보기
+                            </Button>
                           </Link>
-                          <p className="text-xs text-text-muted">
-                            종료: {formatDateTime(a.endAt)}
-                          </p>
-                        </div>
-                        <div className="text-sm text-text-main font-semibold">
-                          {formatKrw(a.currentPrice)}
-                          <span className="text-xs text-text-muted ml-2">
-                            {a.status}
-                          </span>
-                        </div>
-                      </div>
-                      {isEnded && (
-                        <Link to={`/auctions/${a.auctionId}/result`} className="self-start">
-                          <Button variant="outline" size="sm">
-                            경매 결과 보기
-                          </Button>
-                        </Link>
-                      )}
+                        )}
+                      </li>
+                    );
+                  })}
+                  {myAuctionsTotalPages > 1 && (
+                    <li className="py-3 flex items-center justify-center gap-2 border-t border-border">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={myAuctionPage <= 0}
+                        onClick={() => setMyAuctionPage((p) => p - 1)}
+                      >
+                        이전
+                      </Button>
+                      <span className="text-sm text-text-muted">
+                        {myAuctionPage + 1} / {myAuctionsTotalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={myAuctionsLast}
+                        onClick={() => setMyAuctionPage((p) => p + 1)}
+                      >
+                        다음
+                      </Button>
                     </li>
-                  );
-                })
+                  )}
+                </>
               )}
             </ul>
           </div>

@@ -343,13 +343,23 @@ export function AdminPage() {
     },
   });
 
+  const restoreAuction = useMutation({
+    mutationFn: (auctionId: number) =>
+      api.patch(`/api/admin/auctions/${auctionId}/restore`),
+    onSuccess: () => {
+      addToast("경매가 복구되었습니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["admin", "reports"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "auctions", "blocked"] });
+    },
+    onError: (err) => {
+      addToast(getApiErrorMessage(err), "error");
+    },
+  });
+
   const reports = reportsPage?.content ?? [];
   const users = usersPage?.content ?? [];
-  // 종료되거나 차단된 경매 제외
-  const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "BLOCKED"];
-  const auctions = (auctionsPage?.content ?? []).filter(
-    (a) => !excludedStatuses.includes(a.status)
-  );
+  // 경매 관리: 진행중·지난 경매 전부 표시
+  const auctions = auctionsPage?.content ?? [];
   const blockedAuctions = blockedPageData?.content ?? [];
   const blockedUsers = blockedUsersPageData?.content ?? [];
   const inquiries = inquiriesPage?.content ?? [];
@@ -367,13 +377,6 @@ export function AdminPage() {
         return next;
       });
     },
-  });
-
-  const restoreAuction = useMutation({
-    mutationFn: (auctionId: number) =>
-      api.patch(`/api/admin/auctions/${auctionId}/restore`),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["admin", "auctions", "blocked"] }),
   });
 
   const confirmWithdrawal = useMutation({
@@ -679,6 +682,15 @@ export function AdminPage() {
                             처리
                           </Button>
                         )
+                      ) : r.status === "PROCESSED" && r.targetType === "AUCTION" ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => restoreAuction.mutate(r.targetId)}
+                          loading={restoreAuction.isPending}
+                        >
+                          경매 복구
+                        </Button>
                       ) : (
                         <span className="text-sm text-text-muted">
                           {r.status}
