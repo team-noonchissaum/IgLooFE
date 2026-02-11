@@ -319,3 +319,64 @@ export interface AuthTokens {
   nickname?: string;
   role?: string;
 }
+
+/** AI 파이프라인 요청 - POST /api/ai/pipeline */
+export interface AiPipelineReq {
+  imageUrls: string[];
+  metadata?: {
+    seller_note?: string;
+    purchase_year?: number;
+  };
+  startPrice?: number;
+  auctionDuration?: number;
+  startAt?: string;
+  endAt?: string;
+}
+
+/** AI 분석 결과 */
+export interface AiAnalyzeResult {
+  brand: { value: string; confidence: number };
+  model: { value: string; confidence: number };
+  condition: { value: string; confidence: number };
+  defects: Array<{
+    type: string;
+    location: string;
+    severity: string;
+    confidence: number;
+  }>;
+  accessories: string[];
+  text_ocr: string[];
+  image_quality: {
+    is_blurry: boolean;
+    is_overexposed: boolean;
+    resolution_ok: boolean;
+  };
+}
+
+/** AI 카테고리 분류 결과 */
+export interface AiClassifyResult {
+  category_candidates: Array<{
+    category_id: number;
+    category_path: string;
+    confidence: number;
+  }>;
+  selected_category_id: number;
+  selection_reason: string;
+  needs_user_confirmation: boolean;
+}
+
+/** AI 설명 생성 결과 */
+export interface AiDescriptionResult {
+  title: string;
+  summary: string;
+  body: string;
+  hashtags: string[];
+  auction_register_req: AuctionRegisterReq;
+}
+
+/** AI 파이프라인 응답 - POST /api/ai/pipeline */
+export interface AiPipelineRes {
+  analyzeResult: AiAnalyzeResult;
+  classifyResult: AiClassifyResult;
+  descriptionResult: AiDescriptionResult;
+}

@@ -102,23 +102,25 @@ function CategoryTreeNode({
   );
 }
 
+/** 백엔드 AdminStatisticsRes와 동일한 구조 */
 interface StatisticsData {
   date: string;
-  transaction: {
-    totalCount: number;
-    completedCount: number;
-    canceledCount: number;
-  };
-  auction: {
-    totalCount: number;
-    successCount: number;
-    failedCount: number;
-    successRate: number;
+  auctionTrade: {
+    auctionTotalCount: number;
+    auctionSuccessCount: number;
+    auctionFailCount: number;
+    auctionBlockedCount: number;
+    auctionSuccessRate: number;
+    completedOrderCount: number;
+    canceledOrderCount: number;
   };
   credit: {
-    totalCharged: number;
-    totalUsed: number;
-    totalWithdrawn: number;
+    totalCreditAmount: number;
+    chargeAmount: number;
+    withdrawAmount: number;
+    depositForfeitAmount: number;
+    depositReturnAmount: number;
+    settlementAmount: number;
   };
 }
 
@@ -145,9 +147,11 @@ export function AdminPage() {
   const [blockedUsersPage, setBlockedUsersPage] = useState(0);
   const [inquiryPage, setInquiryPage] = useState(0);
   const [withdrawalPage, setWithdrawalPage] = useState(0);
-  const [statsDate, setStatsDate] = useState(
-    () => new Date().toISOString().slice(0, 10)
-  );
+  const [statsDate, setStatsDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  });
   const [blockAuctionReasonMap, setBlockAuctionReasonMap] = useState<Map<number, string>>(new Map());
   const [selectedUserReports, setSelectedUserReports] = useState<{
     userId: number;
@@ -238,15 +242,15 @@ export function AdminPage() {
       enabled: activeTab === "blockedUsers",
     });
 
-  const { data: statistics } = useQuery({
+  const { data: statistics, isLoading: statisticsLoading } = useQuery({
     queryKey: ["admin", "statistics", statsDate],
-    queryFn: () =>
-      api
-        .get<{ message: string; data: StatisticsData }>(
-          "/api/admin/statistics",
-          { params: { date: statsDate } }
-        )
-        .then(unwrapData),
+    queryFn: async () => {
+      const res = await api.get<{ message: string; data: StatisticsData | null }>(
+        "/api/admin/statistics",
+        { params: { date: statsDate } }
+      );
+      return res.data?.data ?? null;
+    },
     enabled: activeTab === "stats",
   });
 
@@ -863,15 +867,27 @@ export function AdminPage() {
                     경매가 없습니다.
                   </p>
                 )}
-                {auctionsPage && !auctionsPage.last && (
-                  <div className="p-4 border-t border-border">
-                    <button
-                      type="button"
-                      onClick={() => setAuctionPage((p) => p + 1)}
-                      className="text-primary font-semibold hover:underline"
+                {auctionsPage && auctionsPage.totalPages > 1 && (
+                  <div className="p-4 border-t border-border flex items-center justify-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={auctionPage <= 0}
+                      onClick={() => setAuctionPage((p) => Math.max(0, p - 1))}
                     >
-                      더 보기
-                    </button>
+                      이전
+                    </Button>
+                    <span className="text-sm text-text-muted">
+                      {auctionPage + 1} / {auctionsPage.totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={auctionsPage.last}
+                      onClick={() => setAuctionPage((p) => p + 1)}
+                    >
+                      다음
+                    </Button>
                   </div>
                 )}
               </div>
@@ -1587,19 +1603,21 @@ export function AdminPage() {
                       <div className="flex justify-between">
                         <dt className="text-text-muted">전체</dt>
                         <dd className="font-bold">
-                          {statistics.transaction.totalCount}건
+                          {statistics.auctionTrade.completedOrderCount +
+                            statistics.auctionTrade.canceledOrderCount}
+                          건
                         </dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-text-muted">완료</dt>
                         <dd className="font-bold text-green-600">
-                          {statistics.transaction.completedCount}건
+                          {statistics.auctionTrade.completedOrderCount}건
                         </dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-text-muted">취소</dt>
                         <dd className="font-bold text-amber-600">
-                          {statistics.transaction.canceledCount}건
+                          {statistics.auctionTrade.canceledOrderCount}건
                         </dd>
                       </div>
                     </dl>
@@ -1612,25 +1630,31 @@ export function AdminPage() {
                       <div className="flex justify-between">
                         <dt className="text-text-muted">전체</dt>
                         <dd className="font-bold">
-                          {statistics.auction.totalCount}건
+                          {statistics.auctionTrade.auctionTotalCount}건
                         </dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-text-muted">낙찰</dt>
                         <dd className="font-bold text-green-600">
-                          {statistics.auction.successCount}건
+                          {statistics.auctionTrade.auctionSuccessCount}건
                         </dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-text-muted">유찰</dt>
                         <dd className="font-bold text-red-600">
-                          {statistics.auction.failedCount}건
+                          {statistics.auctionTrade.auctionFailCount}건
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-text-muted">차단</dt>
+                        <dd className="font-bold text-amber-600">
+                          {statistics.auctionTrade.auctionBlockedCount}건
                         </dd>
                       </div>
                       <div className="flex justify-between pt-2 border-t border-border">
                         <dt className="text-text-muted">낙찰률</dt>
                         <dd className="font-bold text-primary">
-                          {statistics.auction.successRate}%
+                          {statistics.auctionTrade.auctionSuccessRate}%
                         </dd>
                       </div>
                     </dl>
@@ -1643,19 +1667,31 @@ export function AdminPage() {
                       <div className="flex justify-between">
                         <dt className="text-text-muted">충전</dt>
                         <dd className="font-bold text-green-600">
-                          {statistics.credit.totalCharged.toLocaleString()}
+                          {statistics.credit.chargeAmount.toLocaleString()}
                         </dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-text-muted">사용</dt>
+                        <dt className="text-text-muted">환전</dt>
                         <dd className="font-bold">
-                          {statistics.credit.totalUsed.toLocaleString()}
+                          {statistics.credit.withdrawAmount.toLocaleString()}
                         </dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-text-muted">출금</dt>
+                        <dt className="text-text-muted">보증금 회수</dt>
                         <dd className="font-bold">
-                          {statistics.credit.totalWithdrawn.toLocaleString()}
+                          {statistics.credit.depositForfeitAmount.toLocaleString()}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-text-muted">보증금 반환</dt>
+                        <dd className="font-bold">
+                          {statistics.credit.depositReturnAmount.toLocaleString()}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-text-muted">낙찰 정산</dt>
+                        <dd className="font-bold text-primary">
+                          {statistics.credit.settlementAmount.toLocaleString()}
                         </dd>
                       </div>
                     </dl>
@@ -1666,8 +1702,13 @@ export function AdminPage() {
                 </p>
               </div>
             )}
-            {activeTab === "stats" && !statistics && (
+            {activeTab === "stats" && statisticsLoading && (
               <p className="text-text-muted py-8">통계를 불러오는 중...</p>
+            )}
+            {activeTab === "stats" && !statisticsLoading && !statistics && (
+              <p className="text-text-muted py-8">
+                해당 날짜의 통계가 없습니다. (배치 집계 후 조회 가능)
+              </p>
             )}
           </div>
         )}

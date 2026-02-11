@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { auctionApi } from "@/services/auctionApi";
 import { categoryApi } from "@/services/categoryApi";
+import { aiApi } from "@/services/aiApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
@@ -116,6 +117,69 @@ export function AuctionRegisterPage() {
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
+  const generateAiDescription = useMutation({
+    mutationFn: () => {
+      const currentStartPrice = watch("startPrice");
+      const currentDurationHours = watch("auctionDuration") ?? 24;
+      const currentDurationMinutes = currentDurationHours * 60; // 시간을 분으로 변환
+      
+      // 경매 시작/종료 시간 계산 (현재 시간 기준)
+      const now = new Date();
+      const startAt = now.toISOString();
+      const endAt = new Date(now.getTime() + currentDurationHours * 60 * 60 * 1000).toISOString();
+
+      return aiApi.pipeline({
+        imageUrls: imageList,
+        startPrice: currentStartPrice,
+        auctionDuration: currentDurationMinutes,
+        startAt,
+        endAt,
+      });
+    },
+    onSuccess: (data) => {
+      // AI 생성 결과를 폼에 자동 채우기
+      const descResult = data.descriptionResult;
+      setValue("title", descResult.title);
+      setValue("description", descResult.body);
+      
+      // 카테고리 선택 업데이트
+      const selectedCategory = categories.find(
+        (c) => c.id === descResult.auction_register_req.categoryId
+      );
+      
+      if (selectedCategory) {
+        if (selectedCategory.parentId) {
+          // 소분류인 경우: 대분류 먼저 설정 후 소분류 설정
+          setMainCategoryId(selectedCategory.parentId);
+          // 대분류 상태 업데이트 후 소분류 선택을 위해 약간의 지연
+          setTimeout(() => {
+            setValue("categoryId", selectedCategory.id);
+          }, 0);
+        } else {
+          // 대분류인 경우: 대분류 설정 및 카테고리 ID 설정
+          setMainCategoryId(selectedCategory.id);
+          setValue("categoryId", selectedCategory.id);
+        }
+      } else {
+        // 카테고리를 찾지 못한 경우에도 ID는 설정
+        setValue("categoryId", descResult.auction_register_req.categoryId);
+      }
+
+      // 카테고리 신뢰도가 낮으면 사용자에게 알림
+      if (data.classifyResult.needs_user_confirmation) {
+        addToast(
+          "AI가 추천한 카테고리를 확인해주세요. 필요시 수정할 수 있습니다.",
+          "info"
+        );
+      } else {
+        addToast("AI 설명이 생성되었습니다. 필요시 수정해주세요.", "success");
+      }
+    },
+    onError: (err) => {
+      addToast(getApiErrorMessage(err) || "AI 설명 생성에 실패했습니다.", "error");
+    },
+  });
+
   const onSubmit = (data: FormData) => {
     if (imageList.length === 0) {
       addToast(
@@ -185,6 +249,21 @@ export function AuctionRegisterPage() {
               >
                 파일 업로드
               </Button>
+              {imageList.length > 0 && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => generateAiDescription.mutate()}
+                  loading={generateAiDescription.isPending}
+                  className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                >
+                  <span className="material-symbols-outlined text-sm mr-1">
+                    auto_awesome
+                  </span>
+                  AI 설명 생성
+                </Button>
+              )}
               <span className="text-xs text-text-muted">
                 업로드 후 URL이 자동으로 추가됩니다.
               </span>

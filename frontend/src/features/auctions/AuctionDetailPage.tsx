@@ -778,7 +778,10 @@ export function AuctionDetailPage() {
           </div>
 
           <div className="bg-white border border-border rounded-2xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <Link
+              to={auction.sellerId != null ? `/users/${auction.sellerId}` : "#"}
+              className={`flex items-center gap-4 ${auction.sellerId != null ? "hover:opacity-80 transition-opacity" : ""}`}
+            >
               <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center">
                 <span className="material-symbols-outlined text-primary text-2xl">
                   person
@@ -790,7 +793,7 @@ export function AuctionDetailPage() {
                 </p>
                 <p className="text-xs text-text-muted">판매자</p>
               </div>
-            </div>
+            </Link>
             {/* 1:1 채팅 미구현 */}
             <button
               type="button"

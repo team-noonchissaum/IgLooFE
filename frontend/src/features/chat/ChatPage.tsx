@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { chatApi, type MyChatRoomRes } from "@/services/chatApi";
 import { userApi } from "@/services/userApi";
@@ -185,7 +185,16 @@ function ChatRoomPanel({
     <>
       <div className="p-4 border-b border-border flex items-center gap-2 shrink-0">
         <span className="material-symbols-outlined text-text-muted">person</span>
-        <h2 className="font-semibold text-text-main truncate">{opponentName}</h2>
+        {effectiveOpponentId != null ? (
+          <Link
+            to={`/users/${effectiveOpponentId}`}
+            className="font-semibold text-text-main truncate hover:text-primary hover:underline"
+          >
+            {opponentName}
+          </Link>
+        ) : (
+          <h2 className="font-semibold text-text-main truncate">{opponentName}</h2>
+        )}
         {roomDetail && (
           <span className="text-xs text-text-muted">
             경매 #{roomDetail.auctionId}

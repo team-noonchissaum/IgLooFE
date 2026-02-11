@@ -30,6 +30,9 @@ export function AuctionResultPage() {
         res.deliveryType === "DIRECT" ? "직거래가 선택되었습니다." : "택배배송이 선택되었습니다.",
         "success"
       );
+      if (res.deliveryType === "DIRECT" && res.roomId != null) {
+        navigate(`/chat?roomId=${res.roomId}`);
+      }
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });

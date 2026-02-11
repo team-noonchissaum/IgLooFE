@@ -20,6 +20,7 @@ import { ChatPage } from "@/features/chat/ChatPage";
 import { OAuthCallbackPage } from "@/features/auth/OAuthCallbackPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { InquiryPage } from "@/features/inquiry/InquiryPage";
+import { UserProfilePage } from "@/features/users/UserProfilePage";
 
 function App() {
   return (
@@ -119,6 +120,7 @@ function App() {
               </RequireAuth>
             }
           />
+          <Route path="users/:userId" element={<UserProfilePage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="inquiry" element={<InquiryPage />} />
         </Route>

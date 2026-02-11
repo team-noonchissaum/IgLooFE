@@ -47,11 +47,25 @@ export const userApi = {
   deleteUser: () =>
     api.delete<{ message: string; data: null }>("/api/users/me/force"),
 
-  /** 다른 유저 프로필 조회 (닉네임 등) */
+  /** 타유저 프로필 조회 (닉네임, 프로필 이미지, 판매 상품 목록) */
   getUserProfile: (userId: number) =>
     api
-      .get<{ message: string; data: { userId: number; nickname: string; profileUrl: string | null } }>(
-        `/api/users/${userId}`
-      )
+      .get<{ message: string; data: OtherUserProfileRes }>(`/api/users/${userId}`)
       .then(unwrapData),
 };
+
+/** 타유저 프로필 응답 (GET /api/users/{userId}) */
+export interface OtherUserProfileRes {
+  userId: number;
+  nickname: string;
+  profileUrl: string | null;
+  sellerItems: SellerItemRes[];
+}
+
+/** 판매자 상품 항목 */
+export interface SellerItemRes {
+  itemId: number;
+  itemName: string;
+  itemStatus: string;
+  imageUrl: string | null;
+}
