@@ -135,6 +135,16 @@ export function LoginPage() {
                 {errors.password.message}
               </p>
             )}
+            {mode === "login" && (
+              <p className="text-right mt-1">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-primary hover:underline"
+                >
+                  비밀번호 찾기
+                </Link>
+              </p>
+            )}
           </div>
           {mode === "signup" && (
             <div>

@@ -32,6 +32,14 @@ export const authApi = {
   refresh: () => api.post<{ accessToken: string }>("/api/auth/refresh"),
 
   logout: () => api.post("/api/auth/logout"),
+
+  /** 비밀번호 찾기 (이메일로 재설정 링크 발송) */
+  forgotPassword: (email: string) =>
+    api.post("/api/auth/password/forgot", { email }),
+
+  /** 비밀번호 재설정 (메일 링크의 token 사용) */
+  resetPassword: (token: string, newPassword: string) =>
+    api.post("/api/auth/password/reset", { token, newPassword }),
 };
 
 export function getOAuthLoginUrl(
