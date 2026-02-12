@@ -88,17 +88,6 @@ export function MeSidebar() {
           지갑
         </Link>
         <Link
-          to="/wallet"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-            isActive("/wallet")
-              ? "bg-primary text-white font-semibold"
-              : "hover:bg-gray-100 text-text-main font-medium"
-          }`}
-        >
-          <span className="material-symbols-outlined">confirmation_number</span>
-          쿠폰
-        </Link>
-        <Link
           to="/notifications"
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
             isActive("/notifications")

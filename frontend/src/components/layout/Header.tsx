@@ -1,22 +1,24 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { notificationApi } from "@/services/notificationApi";
 import { userApi } from "@/services/userApi";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export function Header() {
   const navigate = useNavigate();
-  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const queryClient = useQueryClient();
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isAuth = Boolean(accessToken);
   const setRole = useAuthStore((s) => s.setRole);
   const isAdmin = useAuthStore((s) => s.isAdmin());
   const logout = useAuthStore((s) => s.logout);
 
   const { data: profile } = useQuery({
-    queryKey: ["users", "me"],
+    queryKey: ["users", "me", accessToken],
     queryFn: () => userApi.getProfile(),
-    enabled: isAuth,
+    enabled: Boolean(accessToken),
   });
 
   useEffect(() => {
@@ -24,13 +26,14 @@ export function Header() {
   }, [profile?.role, setRole]);
 
   const { data: unreadCount } = useQuery({
-    queryKey: ["notifications", "unread-count"],
+    queryKey: ["notifications", "unread-count", accessToken],
     queryFn: () => notificationApi.getUnreadCount(),
-    enabled: isAuth,
+    enabled: Boolean(accessToken),
   });
 
 
   const handleLogout = () => {
+    queryClient.clear();
     logout();
     navigate("/");
   };

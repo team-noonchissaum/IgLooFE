@@ -9,14 +9,15 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * 차단된 유저가 다른 페이지에 접근하려고 하면 /inquiry로 리다이렉트
  */
 export function BlockedUserGuard({ children }: { children: React.ReactNode }) {
-  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isAuth = Boolean(accessToken);
   const location = useLocation();
   const isInquiryPage = location.pathname === "/inquiry" || location.pathname.startsWith("/inquiry");
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ["profile"],
+    queryKey: ["profile", accessToken],
     queryFn: () => userApi.getProfile(),
-    enabled: isAuth && !isInquiryPage,
+    enabled: Boolean(accessToken) && !isInquiryPage,
     retry: false,
   });
 

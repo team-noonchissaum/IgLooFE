@@ -8,13 +8,14 @@ import { Skeleton } from "@/components/ui/Skeleton";
 
 /** 로그인 필요: 미인증 시 / 로 이동, 차단된 유저는 /inquiry로 이동 */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isAuth = Boolean(accessToken);
   const location = useLocation();
   
   const { data: profile } = useQuery({
-    queryKey: ["profile"],
+    queryKey: ["profile", accessToken],
     queryFn: () => userApi.getProfile(),
-    enabled: isAuth,
+    enabled: Boolean(accessToken),
     retry: false,
   });
 
@@ -32,15 +33,16 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 /** ADMIN 역할 필요: 미인증 시 / 로, 일반 유저 시 /me 로 이동, 차단된 유저는 /inquiry로 이동 */
 export function RequireAdmin({ children }: { children: ReactNode }) {
-  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isAuth = Boolean(accessToken);
   const role = useAuthStore((s) => s.role);
   const setRole = useAuthStore((s) => s.setRole);
   const location = useLocation();
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ["users", "me"],
+    queryKey: ["users", "me", accessToken],
     queryFn: () => userApi.getProfile(),
-    enabled: isAuth && role == null,
+    enabled: Boolean(accessToken) && role == null,
   });
 
   useEffect(() => {

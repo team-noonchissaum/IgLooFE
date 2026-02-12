@@ -9,16 +9,16 @@ import { Button } from "@/components/ui/Button";
 
 export function InquiryPage() {
   const addToast = useToastStore((s) => s.add);
-  const isAuth = useAuthStore((s) => s.isAuthenticated());
+  const accessToken = useAuthStore((s) => s.accessToken);
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [content, setContent] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const { data: profile } = useQuery({
-    queryKey: ["profile"],
+    queryKey: ["profile", accessToken],
     queryFn: () => userApi.getProfile(),
-    enabled: isAuth,
+    enabled: Boolean(accessToken),
     retry: false,
   });
 

@@ -213,7 +213,7 @@ export function ChatbotWidget() {
   }, [action, isAuth, messages]);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
       {isOpen && (
         <div className="w-[360px] max-w-[90vw] bg-white border border-border rounded-2xl shadow-xl overflow-hidden mb-3">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
