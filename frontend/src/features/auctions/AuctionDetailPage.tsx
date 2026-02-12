@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
@@ -40,6 +40,7 @@ export function AuctionDetailPage() {
   const addToast = useToastStore((s) => s.add);
 
   const [bidAmount, setBidAmount] = useState("");
+  const [localRecentBid, setLocalRecentBid] = useState<BidHistoryItemRes | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
@@ -69,6 +70,22 @@ export function AuctionDetailPage() {
     enabled: Number.isInteger(id),
   });
   const bids = bidPage?.content ?? [];
+  const delayedBidRefreshTimer = useRef<number | null>(null);
+
+  const recentBids = useMemo(() => {
+    if (!localRecentBid) return bids;
+    const localNickname = localRecentBid.bidderNickname?.trim();
+    const localTime = new Date(localRecentBid.createdAt).getTime();
+    const exists = bids.some((bid) => {
+      const sameBidId = bid.bidId > 0 && bid.bidId === localRecentBid.bidId;
+      const sameBidder = bid.bidderNickname?.trim() === localNickname;
+      const samePrice = bid.bidPrice === localRecentBid.bidPrice;
+      const nearCreatedAt =
+        Math.abs(new Date(bid.createdAt).getTime() - localTime) <= 15_000;
+      return sameBidId || (sameBidder && samePrice && nearCreatedAt);
+    });
+    return exists ? bids : [localRecentBid, ...bids];
+  }, [bids, localRecentBid]);
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -134,9 +151,24 @@ export function AuctionDetailPage() {
       }),
     onSuccess: () => {
       addToast("입찰이 접수되었습니다.", "success");
+      const amount = Number(bidAmount.replace(/,/g, ""));
+      if (Number.isFinite(amount)) {
+        setLocalRecentBid({
+          bidId: -Date.now(),
+          bidderNickname: profile?.nickname?.trim() || "나",
+          bidPrice: amount,
+          createdAt: new Date().toISOString(),
+        });
+      }
       setBidAmount("");
       queryClient.invalidateQueries({ queryKey: ["auction", id] });
       queryClient.invalidateQueries({ queryKey: ["bid", id] });
+      if (delayedBidRefreshTimer.current != null) {
+        window.clearTimeout(delayedBidRefreshTimer.current);
+      }
+      delayedBidRefreshTimer.current = window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["bid", id] });
+      }, 1200);
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -191,6 +223,14 @@ export function AuctionDetailPage() {
     }
     placeBid.mutate(amount);
   };
+
+  useEffect(() => {
+    return () => {
+      if (delayedBidRefreshTimer.current != null) {
+        window.clearTimeout(delayedBidRefreshTimer.current);
+      }
+    };
+  }, []);
 
   const [remaining, setRemaining] = useState(0);
   const [imgIndex, setImgIndex] = useState(0);
@@ -765,10 +805,10 @@ export function AuctionDetailPage() {
             </div>
             <div className="flex-1 overflow-y-auto max-h-[400px] custom-scrollbar">
               <div className="divide-y divide-border">
-                {bids.slice(0, 20).map((bid, i) => (
+                {recentBids.slice(0, 20).map((bid, i) => (
                   <BidRow key={bid.bidId ?? i} bid={bid} />
                 ))}
-                {bids.length === 0 && (
+                {recentBids.length === 0 && (
                   <p className="p-4 text-text-muted text-sm">
                     아직 입찰이 없습니다.
                   </p>
@@ -866,16 +906,17 @@ export function AuctionDetailPage() {
 }
 
 function BidRow({ bid }: { bid: BidHistoryItemRes }) {
+  const bidderName = bid.bidderNickname?.trim() || "입찰자";
   return (
     <div className="p-4 flex items-center justify-between hover:bg-primary/5 transition-colors">
       <div className="flex items-center gap-4">
         <div className="size-11 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
           <span className="text-primary font-bold text-sm">
-            {bid.bidderNickname?.[0] ?? "?"}
+            {bidderName[0] ?? "?"}
           </span>
         </div>
         <div>
-          <p className="text-sm font-bold">{bid.bidderNickname}</p>
+          <p className="text-sm font-bold">{bidderName}</p>
           <p className="text-[11px] text-text-muted flex items-center gap-1">
             <span className="material-symbols-outlined text-[12px]">
               schedule

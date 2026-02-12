@@ -10,8 +10,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 
 const MY_AUCTIONS_PAGE_SIZE = 5;
+const MY_BIDS_PAGE_SIZE = 10;
 
 export function MePage() {
+  const [myBidPage, setMyBidPage] = useState(0);
   const [myAuctionPage, setMyAuctionPage] = useState(0);
 
   const { data: mypage, isLoading } = useQuery({
@@ -25,10 +27,12 @@ export function MePage() {
   });
 
   const { data: myBidsPage } = useQuery({
-    queryKey: ["bid", "my"],
-    queryFn: () => bidApi.myBids(),
+    queryKey: ["bid", "my", myBidPage],
+    queryFn: () => bidApi.myBids({ page: myBidPage, size: MY_BIDS_PAGE_SIZE }),
   });
   const myBids = myBidsPage?.content ?? [];
+  const myBidsLast = myBidsPage?.last ?? true;
+  const myBidsTotalPages = myBidsPage?.totalPages ?? 0;
 
   const { data: myAuctionsPage } = useQuery({
     queryKey: ["users", "me", "auctions", myAuctionPage],
@@ -88,7 +92,8 @@ export function MePage() {
                   참여한 경매가 없습니다.
                 </li>
               ) : (
-                myBids.slice(0, 10).map((b) => {
+                <>
+                {myBids.map((b) => {
                   const isEnded = b.auctionStatus === "SUCCESS" || 
                                   b.auctionStatus === "FAILED" || 
                                   b.auctionStatus === "ENDED";
@@ -122,7 +127,31 @@ export function MePage() {
                       )}
                     </li>
                   );
-                })
+                })}
+                {myBidsTotalPages > 1 && (
+                  <li className="py-3 flex items-center justify-center gap-2 border-t border-border">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={myBidPage <= 0}
+                      onClick={() => setMyBidPage((p) => p - 1)}
+                    >
+                      이전
+                    </Button>
+                    <span className="text-sm text-text-muted">
+                      {myBidPage + 1} / {myBidsTotalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={myBidsLast}
+                      onClick={() => setMyBidPage((p) => p + 1)}
+                    >
+                      다음
+                    </Button>
+                  </li>
+                )}
+                </>
               )}
             </ul>
           </div>

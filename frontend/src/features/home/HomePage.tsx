@@ -9,6 +9,7 @@ import { categoryApi } from "@/services/categoryApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { formatKrw } from "@/lib/format";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { Button } from "@/components/ui/Button";
 import { CategorySidebar } from "@/components/layout/CategoryBar";
 import { ChatbotWidget } from "@/components/chatbot/ChatbotWidget";
 import type { AuctionListRes, Category } from "@/lib/types";
@@ -53,6 +54,17 @@ export function HomePage() {
   const navigate = useNavigate();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const addToast = useToastStore((s) => s.add);
+
+  const keywordFromUrl = searchParams.get("keyword") ?? "";
+  const sortFromUrl = searchParams.get("sort");
+  const pageFromUrl = Number(searchParams.get("page") ?? "0");
+  const normalizedSort: SortType =
+    sortFromUrl && (Object.keys(sortLabels) as SortType[]).includes(sortFromUrl as SortType)
+      ? (sortFromUrl as SortType)
+      : "LATEST";
+  const normalizedPage =
+    Number.isFinite(pageFromUrl) && pageFromUrl >= 0 ? Math.floor(pageFromUrl) : 0;
+
   const categoryIdFromUrl = searchParams.get("categoryId");
   const [categoryId, setCategoryIdState] = useState<number | undefined>(() =>
     categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined
@@ -74,16 +86,48 @@ export function HomePage() {
         const next = new URLSearchParams(prev);
         next.delete("reset");
         next.delete("categoryId");
+        next.delete("keyword");
+        next.delete("sort");
+        next.delete("page");
         return next;
       },
       { replace: true }
     );
   }, [resetFlag, setSearchParams]);
 
-  const [keyword, setKeyword] = useState("");
-  const [sort, setSort] = useState<SortType>("LATEST");
-  const [page, setPage] = useState(0);
-  const [searchInput, setSearchInput] = useState("");
+  const [keyword, setKeyword] = useState(keywordFromUrl);
+  const [sort, setSort] = useState<SortType>(normalizedSort);
+  const [page, setPage] = useState(normalizedPage);
+  const [searchInput, setSearchInput] = useState(keywordFromUrl);
+
+  useEffect(() => {
+    setKeyword(keywordFromUrl);
+    setSearchInput(keywordFromUrl);
+    setSort(normalizedSort);
+    setPage(normalizedPage);
+  }, [keywordFromUrl, normalizedSort, normalizedPage]);
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (categoryId != null) next.set("categoryId", String(categoryId));
+        else next.delete("categoryId");
+
+        if (keyword.trim()) next.set("keyword", keyword.trim());
+        else next.delete("keyword");
+
+        if (sort !== "LATEST") next.set("sort", sort);
+        else next.delete("sort");
+
+        if (page > 0) next.set("page", String(page));
+        else next.delete("page");
+
+        return next;
+      },
+      { replace: true }
+    );
+  }, [categoryId, keyword, sort, page, setSearchParams]);
 
   // 카테고리 목록 가져오기
   const { data: categories = [] } = useQuery({
@@ -270,10 +314,10 @@ export function HomePage() {
     setPage(0);
     setSort("LATEST");
     setCategoryIdState(undefined);
-    navigate("/");
+    setSearchParams({}, { replace: true });
   };
 
-  const hasMore = searchData != null && !searchData.last;
+  const totalPages = Math.max(0, searchData?.totalPages ?? 0);
 
   return (
     <div className="flex max-w-[1200px] mx-auto">
@@ -344,7 +388,10 @@ export function HomePage() {
               <span className="text-sm text-text-muted">정렬:</span>
               <select
                 value={sort}
-                onChange={(e) => setSort(e.target.value as SortType)}
+                onChange={(e) => {
+                  setSort(e.target.value as SortType);
+                  setPage(0);
+                }}
                 className="text-sm font-bold text-primary border-0 bg-transparent cursor-pointer focus:ring-0 dark:text-primary"
                 aria-label="정렬"
               >
@@ -385,15 +432,29 @@ export function HomePage() {
           </div>
         )}
 
-        {hasMore && (
-          <div className="flex justify-center mt-12 mb-8">
-            <button
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-12 mb-8">
+            <Button
               type="button"
-              onClick={() => setPage((p) => p + 1)}
-              className="px-10 py-3.5 rounded-2xl border-2 border-border text-[#495057] font-bold text-[15px] hover:border-primary hover:text-primary hover:bg-primary-light/30 transition-all"
+              variant="outline"
+              size="sm"
+              disabled={page <= 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
             >
-              더 보기
-            </button>
+              이전
+            </Button>
+            <span className="text-sm text-text-muted px-2">
+              {page + 1} / {totalPages}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            >
+              다음
+            </Button>
           </div>
         )}
         </section>

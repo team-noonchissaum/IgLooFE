@@ -328,6 +328,7 @@ export function AdminPage() {
       // 차단 해제 요청 목록 새로고침 (백엔드에서 삭제되었으므로)
       queryClient.invalidateQueries({ queryKey: ["admin", "inquiries"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "users", "blocked"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       addToast("차단 해제가 완료되었습니다.", "success");
     },
     onError: (err) => {
@@ -975,6 +976,21 @@ export function AdminPage() {
                           차단 일시: {u.blockedAt} · 사유: {u.blockReason}
                         </p>
                       </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm(`${u.nickname}님의 차단을 해제하시겠습니까?`)) {
+                            unblockUserByNickname.mutate(u.nickname);
+                          }
+                        }}
+                        loading={
+                          unblockUserByNickname.isPending &&
+                          unblockUserByNickname.variables === u.nickname
+                        }
+                      >
+                        차단 해제
+                      </Button>
                     </li>
                   ))}
                 </ul>
