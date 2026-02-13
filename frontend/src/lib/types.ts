@@ -275,6 +275,15 @@ export interface MyPageRes {
   balance: number;
 }
 
+/** 내 위치 - GET/PUT /api/users/location */
+export interface UserLocationRes {
+  latitude: number;
+  longitude: number;
+  address: string;
+  jibunAddress: string;
+  dong: string;
+}
+
 /** 프로필 수정 요청 - PATCH /api/users/me */
 export interface ProfileUpdateUserReq {
   nickname: string;

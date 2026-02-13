@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
 import { userApi } from "@/services/userApi";
+import { locationApi } from "@/services/locationApi";
 import { imageApi } from "@/services/imageApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
@@ -28,10 +29,28 @@ export function MeEditPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteStep, setDeleteStep] = useState<DeleteStep>("idle");
   const [attemptMessage, setAttemptMessage] = useState<string>("");
+  const [locationAddress, setLocationAddress] = useState("");
 
   const { data: user } = useQuery({
     queryKey: ["users", "me"],
     queryFn: () => userApi.getProfile(),
+  });
+
+  const { data: myLocation } = useQuery({
+    queryKey: ["users", "location"],
+    queryFn: () => locationApi.getMyLocation(),
+    retry: false,
+  });
+
+  const saveLocation = useMutation({
+    mutationFn: (address: string) => locationApi.updateMyLocation(address),
+    onSuccess: (res) => {
+      setLocationAddress(res.address ?? "");
+      addToast("위치가 저장되었습니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["users", "location"] });
+      queryClient.invalidateQueries({ queryKey: ["auctions", "nearby"] });
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
   const {
@@ -97,6 +116,11 @@ export function MeEditPage() {
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
+
+  useEffect(() => {
+    if (!myLocation?.address) return;
+    setLocationAddress(myLocation.address);
+  }, [myLocation?.address]);
 
   return (
     <main className="max-w-[1000px] mx-auto px-6 py-8">
@@ -168,6 +192,39 @@ export function MeEditPage() {
           저장
         </Button>
       </form>
+      <section className="mt-6 space-y-4 bg-white rounded-xl border border-border p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-text-main">내 위치 설정</h2>
+        <p className="text-sm text-text-muted">
+          진행 중인 경매 화면의 내 주변 경매는 여기 저장된 위치를 기준으로 자동 조회됩니다.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={locationAddress}
+            onChange={(e) => setLocationAddress(e.target.value)}
+            className="flex-1 min-w-[260px] rounded-lg border border-border px-4 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+            placeholder="예: 서울 강남구 테헤란로 123"
+            aria-label="내 위치 주소"
+          />
+          <Button
+            type="button"
+            onClick={() => {
+              const address = locationAddress.trim();
+              if (!address) {
+                addToast("주소를 입력해 주세요.", "info");
+                return;
+              }
+              saveLocation.mutate(address);
+            }}
+            loading={saveLocation.isPending}
+          >
+            위치 저장
+          </Button>
+        </div>
+        <p className="text-xs text-text-muted">
+          현재 저장 위치: {myLocation?.address ?? "저장된 위치 없음"}
+        </p>
+      </section>
       <div className="mt-12 pt-8 border-t border-border">
         <h2 className="text-lg font-bold text-text-main mb-2">회원 탈퇴</h2>
         <p className="text-sm text-text-muted mb-4">
