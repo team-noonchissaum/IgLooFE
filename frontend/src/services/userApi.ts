@@ -7,6 +7,7 @@ import type {
   UserDeleteAttemptRes,
   PageResponse,
   AuctionRes,
+  CategorySubscriptionRes,
 } from "@/lib/types";
 
 /** 유저 - GET /api/users/me, PATCH /api/users/me. 마이페이지 - GET /api/mypage */
@@ -51,6 +52,31 @@ export const userApi = {
   getUserProfile: (userId: number) =>
     api
       .get<{ message: string; data: OtherUserProfileRes }>(`/api/users/${userId}`)
+      .then(unwrapData),
+
+  /** 내 관심 카테고리 조회 */
+  getCategorySubscriptions: () =>
+    api
+      .get<{ message: string; data: CategorySubscriptionRes }>(
+        "/api/users/me/category-subscriptions"
+      )
+      .then(unwrapData),
+
+  /** 내 관심 카테고리 등록 */
+  addCategorySubscription: (categoryId: number) =>
+    api
+      .post<{ message: string; data: CategorySubscriptionRes }>(
+        "/api/users/me/category-subscriptions",
+        { categoryId }
+      )
+      .then(unwrapData),
+
+  /** 내 관심 카테고리 해제 */
+  removeCategorySubscription: (categoryId: number) =>
+    api
+      .delete<{ message: string; data: CategorySubscriptionRes }>(
+        `/api/users/me/category-subscriptions/${categoryId}`
+      )
       .then(unwrapData),
 };
 

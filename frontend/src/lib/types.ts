@@ -284,6 +284,17 @@ export interface UserLocationRes {
   dong: string;
 }
 
+/** 관심 카테고리 항목 */
+export interface CategorySubscriptionItemRes {
+  categoryId: number;
+  categoryName: string;
+}
+
+/** 관심 카테고리 응답 - GET/POST/DELETE /api/users/me/category-subscriptions */
+export interface CategorySubscriptionRes {
+  subscriptions: CategorySubscriptionItemRes[];
+}
+
 /** 프로필 수정 요청 - PATCH /api/users/me */
 export interface ProfileUpdateUserReq {
   nickname: string;
