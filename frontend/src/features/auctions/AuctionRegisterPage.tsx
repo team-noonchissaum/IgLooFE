@@ -35,7 +35,6 @@ export function AuctionRegisterPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.add);
-  const [imageInput, setImageInput] = useState("");
   const [imageList, setImageList] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -73,14 +72,6 @@ export function AuctionRegisterPage() {
       auctionDuration: 24,
     },
   });
-
-  const addImage = () => {
-    const url = imageInput.trim();
-    if (!url) return;
-    setImageList((prev) => [...prev, url]);
-    setValue("imageUrls", [...imageList, url]);
-    setImageInput("");
-  };
 
   const removeImage = (index: number) => {
     const next = imageList.filter((_, i) => i !== index);
@@ -224,11 +215,11 @@ export function AuctionRegisterPage() {
                 add_a_photo
               </span>
               <h2 className="text-xl font-bold text-text-main">
-                1. 이미지 (URL)
+                1. 이미지
               </h2>
             </div>
             <p className="text-text-muted text-sm mb-6">
-              이미지 URL을 입력하거나 파일 업로드를 사용할 수 있습니다.
+              이미지 파일을 업로드해 등록할 수 있습니다.
             </p>
             <div className="flex flex-wrap gap-2 mb-4 items-center">
               <input
@@ -295,23 +286,6 @@ export function AuctionRegisterPage() {
                 업로드 후 URL이 자동으로 추가됩니다. (파일당 최대 {formatFileSizeMB(MAX_IMAGE_FILE_SIZE_BYTES)}MB)
               </span>
             </div>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <input
-                type="url"
-                placeholder="https://..."
-                value={imageInput}
-                onChange={(e) => setImageInput(e.target.value)}
-                className="flex-1 min-w-[200px] rounded-lg border border-border px-4 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={addImage}
-              >
-                추가
-              </Button>
-            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {imageList.map((url, i) => (
                 <div
@@ -339,13 +313,13 @@ export function AuctionRegisterPage() {
               ))}
               <div
                 className="aspect-square rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors bg-gray-50"
-                onClick={addImage}
+                onClick={() => fileInputRef.current?.click()}
               >
                 <span className="material-symbols-outlined text-3xl text-text-muted">
                   upload_file
                 </span>
                 <span className="text-[10px] font-bold text-text-muted">
-                  URL 추가
+                  이미지 추가
                 </span>
               </div>
             </div>
