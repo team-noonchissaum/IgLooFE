@@ -729,7 +729,7 @@ export function AuctionDetailPage() {
                               1:1 채팅
                             </Button>
                           </Link>
-                          <Link to="/delivery" className="flex-1">
+                          <Link to={`/delivery?auctionId=${id}`} className="flex-1">
                             <Button variant="outline" className="w-full">
                               <span className="material-symbols-outlined">local_shipping</span>
                               배송 정보
@@ -757,7 +757,7 @@ export function AuctionDetailPage() {
                               1:1 채팅
                             </Button>
                           </Link>
-                          <Link to="/delivery" className="flex-1">
+                          <Link to={`/delivery?auctionId=${id}`} className="flex-1">
                             <Button variant="outline" className="w-full">
                               <span className="material-symbols-outlined">local_shipping</span>
                               배송 정보

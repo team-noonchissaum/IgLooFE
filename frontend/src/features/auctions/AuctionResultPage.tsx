@@ -84,8 +84,8 @@ export function AuctionResultPage() {
     return highestBid.bidderNickname === profile.nickname;
   }, [isAuth, profile, auction, bidPage, bids, isSuccess, isEnded]);
 
-  // 주문은 SUCCESS 상태일 때만 조회 (ENDED 상태에서는 아직 주문이 생성되지 않음)
-  const needsOrder = isSuccess && (isWinner || isMyAuction);
+  // 거래 대상(낙찰자/판매자)이라면 SUCCESS/ENDED 모두 주문 조회를 시도
+  const needsOrder = (isSuccess || isEnded) && (isWinner || isMyAuction);
   const {
     data: order,
     isLoading: orderLoading,
