@@ -77,6 +77,11 @@ export function DeliveryPage() {
   const [trackingData, setTrackingData] = useState<Awaited<
     ReturnType<typeof orderApi.getShipmentTracking>
   > | null>(null);
+  const hasTrackingInfo = Boolean(shipment?.carrierCode && shipment?.trackingNumber);
+  const isDeliveryCompleted =
+    shipment?.status === "DELIVERED" ||
+    shipment?.status === "COMPLETE" ||
+    trackingData?.delivered === true;
 
   const updateAddressField = useCallback(
     (field: keyof SaveAddressReq, value: string) => {
@@ -136,6 +141,7 @@ export function DeliveryPage() {
     onSuccess: (res) => {
       setTrackingData(res);
       if (!res) addToast("실시간 배송 추적 정보가 없습니다.", "info");
+      queryClient.invalidateQueries({ queryKey: ["shipment", effectiveOrderId] });
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -337,20 +343,39 @@ export function DeliveryPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => loadTracking.mutate()}
+                    onClick={() => {
+                      if (!hasTrackingInfo) {
+                        addToast("송장 등록 후 실시간 배송 추적이 가능합니다.", "info");
+                        return;
+                      }
+                      loadTracking.mutate();
+                    }}
                     loading={loadTracking.isPending}
+                    disabled={!hasTrackingInfo}
                   >
                     실시간 배송 추적 조회
                   </Button>
                   {isBuyer && (
                     <Button
-                      onClick={() => confirmShipment.mutate()}
+                      onClick={() => {
+                        if (!isDeliveryCompleted) {
+                          addToast("배송완료(complete) 상태에서만 구매확정할 수 있습니다.", "info");
+                          return;
+                        }
+                        confirmShipment.mutate();
+                      }}
                       loading={confirmShipment.isPending}
+                      disabled={!isDeliveryCompleted}
                     >
                       택배 구매확정
                     </Button>
                   )}
                 </div>
+                {isBuyer && !isDeliveryCompleted && (
+                  <p className="text-xs text-text-muted">
+                    배송 상태가 완료(DELIVERED/COMPLETE)로 변경되면 구매확정 버튼이 활성화됩니다.
+                  </p>
+                )}
                 {trackingData && (
                   <div className="rounded-lg border border-border bg-gray-50 p-4">
                     <p className="text-sm font-semibold text-text-main">
