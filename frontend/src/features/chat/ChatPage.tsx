@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
 import { chatApi, type MyChatRoomRes } from "@/services/chatApi";
 import { userApi } from "@/services/userApi";
+import { reportApi } from "@/services/reportApi";
+import { getApiErrorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { useToastStore } from "@/stores/toastStore";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useChatWebSocket } from "@/hooks/useChatWebSocket";
 import type { ChatMessagePayload } from "@/hooks/useChatWebSocket";
@@ -116,6 +121,10 @@ function ChatRoomPanel({
 }) {
   const room = rooms.find((r) => r.roomId === roomId);
   const opponentId = room?.opponentId;
+  const addToast = useToastStore((s) => s.add);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDescription, setReportDescription] = useState("");
 
   const { data: roomDetail } = useQuery({
     queryKey: ["chat", "room", roomId],
@@ -174,6 +183,23 @@ function ChatRoomPanel({
   }, [messages]);
 
   const [input, setInput] = useState("");
+  const reportSubmit = useMutation({
+    mutationFn: () =>
+      reportApi.create({
+        targetType: "USER",
+        targetId: effectiveOpponentId!,
+        reason: reportReason.trim(),
+        description: reportDescription.trim() || undefined,
+      }),
+    onSuccess: () => {
+      addToast("신고가 접수되었습니다. 검토 후 조치하겠습니다.", "success");
+      setReportModalOpen(false);
+      setReportReason("");
+      setReportDescription("");
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
@@ -199,6 +225,17 @@ function ChatRoomPanel({
           <span className="text-xs text-text-muted">
             경매 #{roomDetail.auctionId}
           </span>
+        )}
+        {effectiveOpponentId != null && (
+          <button
+            type="button"
+            onClick={() => setReportModalOpen(true)}
+            className="ml-auto p-2 rounded-lg border border-border text-text-muted hover:bg-gray-100 hover:text-red-500 transition-colors"
+            aria-label="상대 유저 신고"
+            title="상대 유저 신고"
+          >
+            <span className="material-symbols-outlined">flag</span>
+          </button>
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -236,6 +273,74 @@ function ChatRoomPanel({
           전송
         </button>
       </div>
+      <Modal
+        open={reportModalOpen}
+        onClose={() => {
+          setReportModalOpen(false);
+          setReportReason("");
+          setReportDescription("");
+        }}
+        title="유저 신고"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!reportReason.trim()) {
+              addToast("신고 사유를 입력해 주세요.", "error");
+              return;
+            }
+            if (effectiveOpponentId == null) {
+              addToast("신고 대상 정보를 찾을 수 없습니다.", "error");
+              return;
+            }
+            reportSubmit.mutate();
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-semibold text-text-main mb-1.5">
+              신고 사유 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              placeholder="예: 욕설, 비방, 사기 의심"
+              className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+              maxLength={200}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-text-main mb-1.5">
+              상세 설명 (선택)
+            </label>
+            <textarea
+              value={reportDescription}
+              onChange={(e) => setReportDescription(e.target.value)}
+              placeholder="추가로 전달할 내용이 있으면 입력해 주세요."
+              rows={3}
+              className="w-full rounded-xl border border-border px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+              maxLength={500}
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setReportModalOpen(false);
+                setReportReason("");
+                setReportDescription("");
+              }}
+            >
+              취소
+            </Button>
+            <Button type="submit" loading={reportSubmit.isPending}>
+              신고하기
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }
