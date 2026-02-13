@@ -59,6 +59,14 @@ export interface AuctionRes {
   categoryName: string;
   wishCount: number;
   isWished: boolean | null;
+  recommendedAuctions?: RecommendedAuctionRes[];
+}
+
+export interface RecommendedAuctionRes {
+  auctionId: number;
+  title: string;
+  thumbnailUrl?: string | null;
+  imageUrls?: string[];
 }
 
 export type AuctionStatus =

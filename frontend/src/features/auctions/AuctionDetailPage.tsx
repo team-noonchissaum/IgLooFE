@@ -14,7 +14,7 @@ import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { BidHistoryItemRes } from "@/lib/types";
+import type { BidHistoryItemRes, RecommendedAuctionRes } from "@/lib/types";
 
 function minNextBid(current: number): number {
   const next = Math.ceil((current * 1.1) / 10) * 10;
@@ -288,6 +288,9 @@ export function AuctionDetailPage() {
 
   const images = auction.imageUrls?.filter(Boolean) ?? [];
   const currentImg = images[imgIndex];
+  const recommendedAuctions = (auction.recommendedAuctions ?? [])
+    .filter((item) => item.auctionId !== auction.auctionId)
+    .slice(0, 5);
 
   return (
     <>
@@ -806,6 +809,23 @@ export function AuctionDetailPage() {
           </div>
         </div>
       </div>
+
+      {recommendedAuctions.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-primary">recommend</span>
+            <h2 className="text-xl font-bold text-text-main">추천 경매</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+            {recommendedAuctions.map((recommended) => (
+              <RecommendedAuctionCard
+                key={recommended.auctionId}
+                auction={recommended}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </main>
 
     {lightboxOpen && currentImg && (
@@ -862,6 +882,36 @@ export function AuctionDetailPage() {
       </div>
     )}
     </>
+  );
+}
+
+function RecommendedAuctionCard({ auction }: { auction: RecommendedAuctionRes }) {
+  const imageUrl = auction.thumbnailUrl ?? auction.imageUrls?.[0];
+
+  return (
+    <Link
+      to={`/auctions/${auction.auctionId}`}
+      className="group rounded-2xl border border-border bg-white overflow-hidden hover:shadow-md transition-shadow"
+    >
+      <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={auction.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-text-muted">
+            <span className="material-symbols-outlined text-4xl">image</span>
+          </div>
+        )}
+      </div>
+      <div className="px-3 py-2.5">
+        <p className="text-sm font-semibold text-text-main line-clamp-1">
+          {auction.title}
+        </p>
+      </div>
+    </Link>
   );
 }
 
