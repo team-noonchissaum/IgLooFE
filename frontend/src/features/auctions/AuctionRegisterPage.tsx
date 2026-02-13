@@ -12,6 +12,8 @@ import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { imageApi } from "@/services/imageApi";
 
+const MAX_IMAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024; // backend max-file-size: 10MB
+
 const schema = z.object({
   title: z.string().min(1, "제목을 입력하세요"),
   description: z.string().min(1, "설명을 입력하세요"),
@@ -85,6 +87,8 @@ export function AuctionRegisterPage() {
     setImageList(next);
     setValue("imageUrls", next);
   };
+
+  const formatFileSizeMB = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);
 
   const createAuction = useMutation({
     mutationFn: (data: FormData) =>
@@ -236,7 +240,30 @@ export function AuctionRegisterPage() {
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
                   if (files.length === 0) return;
-                  uploadImages.mutate(files);
+                  const oversized = files.filter(
+                    (file) => file.size > MAX_IMAGE_FILE_SIZE_BYTES
+                  );
+                  if (oversized.length > 0) {
+                    const namesPreview = oversized
+                      .slice(0, 2)
+                      .map((file) => file.name)
+                      .join(", ");
+                    addToast(
+                      `이미지 용량은 파일당 최대 10MB입니다. 초과 파일: ${namesPreview}${
+                        oversized.length > 2 ? " 외" : ""
+                      }`,
+                      "error"
+                    );
+                  }
+
+                  const validFiles = files.filter(
+                    (file) => file.size <= MAX_IMAGE_FILE_SIZE_BYTES
+                  );
+                  if (validFiles.length === 0) {
+                    e.target.value = "";
+                    return;
+                  }
+                  uploadImages.mutate(validFiles);
                   e.target.value = "";
                 }}
               />
@@ -265,7 +292,7 @@ export function AuctionRegisterPage() {
                 </Button>
               )}
               <span className="text-xs text-text-muted">
-                업로드 후 URL이 자동으로 추가됩니다.
+                업로드 후 URL이 자동으로 추가됩니다. (파일당 최대 {formatFileSizeMB(MAX_IMAGE_FILE_SIZE_BYTES)}MB)
               </span>
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
