@@ -66,12 +66,10 @@ export function HomePage() {
     Number.isFinite(pageFromUrl) && pageFromUrl >= 0 ? Math.floor(pageFromUrl) : 0;
 
   const categoryIdFromUrl = searchParams.get("categoryId");
-  const [categoryId, setCategoryIdState] = useState<number | undefined>(() =>
-    categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined
-  );
-  useEffect(() => {
-    const id = categoryIdFromUrl ? Number(categoryIdFromUrl) : undefined;
-    setCategoryIdState(Number.isNaN(id) ? undefined : id);
+  const categoryId = useMemo(() => {
+    if (!categoryIdFromUrl) return undefined;
+    const parsed = Number(categoryIdFromUrl);
+    return Number.isNaN(parsed) ? undefined : parsed;
   }, [categoryIdFromUrl]);
   const resetFlag = searchParams.get("reset") === "1";
   useEffect(() => {
@@ -80,7 +78,6 @@ export function HomePage() {
     setSearchInput("");
     setPage(0);
     setSort("LATEST");
-    setCategoryIdState(undefined);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -111,8 +108,6 @@ export function HomePage() {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (categoryId != null) next.set("categoryId", String(categoryId));
-        else next.delete("categoryId");
 
         if (keyword.trim()) next.set("keyword", keyword.trim());
         else next.delete("keyword");
@@ -127,7 +122,7 @@ export function HomePage() {
       },
       { replace: true }
     );
-  }, [categoryId, keyword, sort, page, setSearchParams]);
+  }, [keyword, sort, page, setSearchParams]);
 
   // 카테고리 목록 가져오기
   const { data: categories = [] } = useQuery({
@@ -313,7 +308,6 @@ export function HomePage() {
     setSearchInput("");
     setPage(0);
     setSort("LATEST");
-    setCategoryIdState(undefined);
     setSearchParams({}, { replace: true });
   };
 
