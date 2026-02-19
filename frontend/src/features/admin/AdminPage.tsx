@@ -527,7 +527,15 @@ export function AdminPage() {
   /** 평면 목록을 부모-자식 트리로 변환 */
   const categoryTree: CategoryTreeNodeType[] = (() => {
     const byId = new Map<number, CategoryTreeNodeType>();
-    categories.forEach((c) => {
+    const sortedCategories = [...categories].sort((a, b) => {
+      const aParent = a.parentId ?? 0;
+      const bParent = b.parentId ?? 0;
+      if (aParent !== bParent) return aParent - bParent;
+      const nameCmp = a.name.localeCompare(b.name, "ko");
+      if (nameCmp !== 0) return nameCmp;
+      return a.id - b.id;
+    });
+    sortedCategories.forEach((c) => {
       byId.set(c.id, { ...c, children: [] });
     });
     const roots: CategoryTreeNodeType[] = [];
@@ -542,6 +550,7 @@ export function AdminPage() {
     });
     return roots;
   })();
+  const rootCategories = categories.filter((c) => c.parentId == null);
 
   return (
     <main className="flex min-h-[80vh]">
@@ -1541,7 +1550,7 @@ export function AdminPage() {
                     className="rounded-lg border border-border px-3 py-2 text-sm"
                   >
                     <option value="">최상위 (루트)</option>
-                    {categories.map((c) => (
+                    {rootCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>

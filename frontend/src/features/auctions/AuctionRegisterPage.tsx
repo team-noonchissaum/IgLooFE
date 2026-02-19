@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,6 +31,64 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+function getRootCategoryId(
+  categories: { id: number; parentId: number | null }[],
+  categoryId: number
+): number {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  let current = byId.get(categoryId);
+  while (current && current.parentId != null) {
+    const parent = byId.get(current.parentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return current?.id ?? categoryId;
+}
+
+function getDescendantLeafCategories(
+  categories: { id: number; name: string; parentId: number | null }[],
+  rootId: number
+) {
+  const childrenMap = new Map<number, { id: number; name: string; parentId: number | null }[]>();
+  categories.forEach((c) => {
+    if (c.parentId != null) {
+      const list = childrenMap.get(c.parentId) ?? [];
+      list.push(c);
+      childrenMap.set(c.parentId, list);
+    }
+  });
+
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const root = byId.get(rootId);
+  if (!root) return [] as { id: number; name: string; parentId: number | null; label: string }[];
+
+  const result: { id: number; name: string; parentId: number | null; label: string }[] = [];
+  const stack: Array<{ id: number; path: string[] }> = [{ id: rootId, path: [root.name] }];
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const children = childrenMap.get(current.id) ?? [];
+    if (children.length === 0) {
+      const node = byId.get(current.id);
+      if (node) {
+        result.push({
+          ...node,
+          label: current.path.slice(1).join(" > ") || node.name,
+        });
+      }
+      continue;
+    }
+    children.forEach((child) => {
+      stack.push({
+        id: child.id,
+        path: [...current.path, child.name],
+      });
+    });
+  }
+
+  return result.sort((a, b) => a.label.localeCompare(b.label, "ko"));
+}
+
 export function AuctionRegisterPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,17 +101,23 @@ export function AuctionRegisterPage() {
     queryFn: () => categoryApi.list(),
   });
 
-  const mainCategories = categories.filter((c) => c.parentId === null);
+  const mainCategories = useMemo(
+    () =>
+      [...categories]
+        .filter((c) => c.parentId === null)
+        .sort((a, b) => a.name.localeCompare(b.name, "ko")),
+    [categories]
+  );
   const [mainCategoryId, setMainCategoryId] = useState<number | null>(null);
-  const subCategories = mainCategoryId
-    ? categories.filter((c) => c.parentId === mainCategoryId)
-    : [];
-  const selectableCategories =
-    subCategories.length > 0
-      ? subCategories
-      : mainCategoryId
-        ? mainCategories.filter((c) => c.id === mainCategoryId)
-        : [];
+  const selectableCategories = useMemo(() => {
+    if (!mainCategoryId) return [];
+    const descendants = getDescendantLeafCategories(categories, mainCategoryId);
+    if (descendants.length > 0) {
+      return descendants;
+    }
+    const root = mainCategories.find((c) => c.id === mainCategoryId);
+    return root ? [{ ...root, label: root.name }] : [];
+  }, [categories, mainCategories, mainCategoryId]);
 
   const {
     register,
@@ -143,18 +207,9 @@ export function AuctionRegisterPage() {
       );
       
       if (selectedCategory) {
-        if (selectedCategory.parentId) {
-          // 소분류인 경우: 대분류 먼저 설정 후 소분류 설정
-          setMainCategoryId(selectedCategory.parentId);
-          // 대분류 상태 업데이트 후 소분류 선택을 위해 약간의 지연
-          setTimeout(() => {
-            setValue("categoryId", selectedCategory.id);
-          }, 0);
-        } else {
-          // 대분류인 경우: 대분류 설정 및 카테고리 ID 설정
-          setMainCategoryId(selectedCategory.id);
-          setValue("categoryId", selectedCategory.id);
-        }
+        const rootId = getRootCategoryId(categories, selectedCategory.id);
+        setMainCategoryId(rootId);
+        setValue("categoryId", selectedCategory.id);
       } else {
         // 카테고리를 찾지 못한 경우에도 ID는 설정
         setValue("categoryId", descResult.auction_register_req.categoryId);
@@ -406,7 +461,7 @@ export function AuctionRegisterPage() {
                     <option value={0}>선택</option>
                     {selectableCategories.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name}
+                        {c.label}
                       </option>
                     ))}
                   </select>
