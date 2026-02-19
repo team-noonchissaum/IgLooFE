@@ -12,19 +12,25 @@ export const NON_LISTED_AUCTION_STATUSES: AuctionStatus[] = [
   "READY",
 ];
 
-export function minNextBid(current: number): number {
-  const next = Math.ceil((current * 1.1) / 10) * 10;
-  return next > current ? next : current + 10;
+export function minNextBid(current: number, startPrice: number): number {
+  const increment = startPrice > 0 ? Math.ceil(startPrice * 0.1) : 100;
+  return current + increment;
 }
 
-/** 최소 입찰가: 최초 입찰(입찰 수 0)이면 등록가, 그 외에는 현재가 기준 10% 상승 */
+// First bid: start price as-is (including 0).
+// Next bids: current price + (10% of start price), +100 when start price is 0.
 export function getMinBid(
   currentPrice: number,
   startPrice: number,
   bidCount: number
 ): number {
-  if (bidCount === 0) return startPrice;
-  return minNextBid(currentPrice);
+  const normalizedStartPrice = startPrice > 0 ? startPrice : 0;
+
+  if (bidCount === 0) {
+    return startPrice;
+  }
+
+  return minNextBid(currentPrice, normalizedStartPrice);
 }
 
 export function formatWonNumber(amount: number): string {
