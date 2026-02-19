@@ -14,6 +14,7 @@ const schema = z.object({
   email: z.string().email("올바른 이메일을 입력하세요"),
   password: z.string().min(1, "비밀번호를 입력하세요"),
   nickname: z.string().optional(),
+  address: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -45,7 +46,7 @@ export function LoginPage() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "", nickname: "" },
+    defaultValues: { email: "", password: "", nickname: "", address: "" },
   });
 
   const login = useMutation({
@@ -69,6 +70,7 @@ export function LoginPage() {
         email: data.email,
         password: data.password,
         nickname: (data.nickname || data.email.split("@")[0]).trim(),
+        address: (data.address || "").trim(),
       }),
     onSuccess: (_res, variables) => {
       addToast("회원가입되었습니다. 로그인합니다.", "success");
@@ -93,8 +95,15 @@ export function LoginPage() {
   });
 
   const onSubmit = (data: FormData) => {
-    if (mode === "login") login.mutate(data);
-    else signup.mutate(data);
+    if (mode === "login") {
+      login.mutate(data);
+      return;
+    }
+    if (!(data.address || "").trim()) {
+      addToast("회원가입 시 주소를 입력해 주세요.", "error");
+      return;
+    }
+    signup.mutate(data);
   };
 
   return (
@@ -147,16 +156,28 @@ export function LoginPage() {
             )}
           </div>
           {mode === "signup" && (
-            <div>
-              <label className="block text-sm font-semibold text-text-main mb-1">
-                닉네임
-              </label>
-              <input
-                {...register("nickname")}
-                className="w-full rounded-xl border border-border px-4 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
-                placeholder="닉네임"
-              />
-            </div>
+            <>
+              <div>
+                <label className="block text-sm font-semibold text-text-main mb-1">
+                  닉네임
+                </label>
+                <input
+                  {...register("nickname")}
+                  className="w-full rounded-xl border border-border px-4 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="닉네임"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-text-main mb-1">
+                  주소
+                </label>
+                <input
+                  {...register("address")}
+                  className="w-full rounded-xl border border-border px-4 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                  placeholder="예: 서울 강남구 테헤란로 123"
+                />
+              </div>
+            </>
           )}
           <Button
             type="submit"

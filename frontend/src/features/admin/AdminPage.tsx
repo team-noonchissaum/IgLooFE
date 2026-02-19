@@ -770,15 +770,29 @@ export function AdminPage() {
                     </li>
                   ))}
                 </ul>
-                {usersPage && !usersPage.last && (
-                  <div className="p-4 border-t border-border">
-                    <button
+                {usersPage && usersPage.totalPages > 1 && (
+                  <div className="p-4 border-t border-border flex items-center justify-center gap-2">
+                    <Button
                       type="button"
-                      onClick={() => setUserPage((p) => p + 1)}
-                      className="text-primary font-semibold hover:underline"
+                      variant="outline"
+                      size="sm"
+                      disabled={userPage <= 0}
+                      onClick={() => setUserPage((p) => Math.max(0, p - 1))}
                     >
-                      더 보기
-                    </button>
+                      이전
+                    </Button>
+                    <span className="text-sm text-text-muted">
+                      {userPage + 1} / {usersPage.totalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={usersPage.last}
+                      onClick={() => setUserPage((p) => p + 1)}
+                    >
+                      다음
+                    </Button>
                   </div>
                 )}
               </div>

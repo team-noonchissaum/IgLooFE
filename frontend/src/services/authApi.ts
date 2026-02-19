@@ -20,7 +20,7 @@ export interface LoginReqOAuth {
 }
 
 export const authApi = {
-  signup: (body: { email: string; password: string; nickname: string }) =>
+  signup: (body: { email: string; password: string; nickname: string; address: string }) =>
     api.post<{ userId: number; email: string; nickname: string }>(
       "/api/auth/signup",
       body,
