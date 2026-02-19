@@ -13,7 +13,7 @@ export const NON_LISTED_AUCTION_STATUSES: AuctionStatus[] = [
 ];
 
 export function minNextBid(current: number, startPrice: number): number {
-  const increment = startPrice > 0 ? Math.ceil(startPrice * 0.1) : 100;
+  const increment = Math.max(Math.ceil(startPrice * 0.1), 100);
   return current + increment;
 }
 
