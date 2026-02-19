@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { CategorySidebar } from "@/components/layout/CategoryBar";
 import { ChatbotWidget } from "@/components/chatbot/ChatbotWidget";
 import type { AuctionListRes, AuctionRes, Category } from "@/lib/types";
+import { NON_LISTED_AUCTION_STATUSES } from "@/features/auctions/auctionUtils";
 
 type SortType =
   | "LATEST"
@@ -256,7 +257,7 @@ export function HomePage() {
           });
           
           // 상태 필터링
-          const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "READY"];
+          const excludedStatuses = NON_LISTED_AUCTION_STATUSES;
           let filtered = (allResults?.content ?? []).filter(
             (a) => !excludedStatuses.includes(a.status)
           );
@@ -327,7 +328,7 @@ export function HomePage() {
       );
 
       // 상태 필터링 (ENDED, SUCCESS, FAILED, CANCELED, READY 제외)
-      const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "READY"];
+      const excludedStatuses = NON_LISTED_AUCTION_STATUSES;
       let filteredAuctions = uniqueAuctions.filter(
         (a) => !excludedStatuses.includes(a.status)
       );
@@ -376,7 +377,7 @@ export function HomePage() {
     retry: false,
   });
 
-  const excludedStatuses = ["ENDED", "SUCCESS", "FAILED", "CANCELED", "READY"];
+  const excludedStatuses = NON_LISTED_AUCTION_STATUSES;
   const auctions = (searchData?.content ?? []).filter(
     (a) => !excludedStatuses.includes(a.status)
   );

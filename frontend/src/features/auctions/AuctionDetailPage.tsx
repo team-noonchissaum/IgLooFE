@@ -15,25 +15,17 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type { BidHistoryItemRes, RecommendedAuctionRes } from "@/lib/types";
-
-function minNextBid(current: number): number {
-  const next = Math.ceil((current * 1.1) / 10) * 10;
-  return next > current ? next : current + 10;
-}
-
-/** 최소 입찰가: 최초 입찰(입찰 수 0)이면 등록가, 그 외에는 현재가 기준 10% 상승 */
-function getMinBid(
-  currentPrice: number,
-  startPrice: number,
-  bidCount: number
-): number {
-  if (bidCount === 0) return startPrice;
-  return minNextBid(currentPrice);
-}
+import {
+  formatWonNumber,
+  getMinBid,
+  isAuctionBiddable,
+  isValidAuctionId,
+} from "./auctionUtils";
 
 export function AuctionDetailPage() {
   const { auctionId } = useParams<{ auctionId: string }>();
   const id = Number(auctionId);
+  const validAuctionId = isValidAuctionId(id);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
@@ -61,14 +53,14 @@ export function AuctionDetailPage() {
   } = useQuery({
     queryKey: ["auction", id],
     queryFn: () => auctionApi.getById(id),
-    enabled: Number.isInteger(id) && id > 0,
+    enabled: validAuctionId,
     retry: false,
   });
 
   const { data: bidPage } = useQuery({
     queryKey: ["bid", id],
     queryFn: () => bidApi.list(id),
-    enabled: Number.isInteger(id),
+    enabled: validAuctionId,
   });
   const bids = bidPage?.content ?? [];
   const delayedBidRefreshTimer = useRef<number | null>(null);
@@ -95,7 +87,7 @@ export function AuctionDetailPage() {
   });
 
   useAuctionWebSocket(
-    Number.isInteger(id) ? id : null,
+    validAuctionId ? id : null,
     (data) =>
       setWsSnapshot((prev) =>
         Object.keys(data).length ? { ...prev, ...data } : prev
@@ -123,8 +115,7 @@ export function AuctionDetailPage() {
   const status = wsSnapshot.status ?? auction?.status;
   const isMyAuction =
     isAuth && profile && auction && auction.sellerId != null && profile.userId === auction.sellerId;
-  const canBid =
-    (status === "RUNNING" || status === "DEADLINE") && isAuth && !isMyAuction;
+  const canBid = isAuctionBiddable(status) && isAuth && !isMyAuction;
   
   // 경매 종료 후 낙찰자 확인 (최고 입찰자가 현재 사용자인지)
   const isWinner = useMemo(() => {
@@ -280,8 +271,7 @@ export function AuctionDetailPage() {
     hourInDay,
   ).padStart(2, "0")}:${String(minuteInDay).padStart(2, "0")}`;
 
-  const invalidId = !Number.isInteger(id) || id <= 0;
-  if (invalidId) {
+  if (!validAuctionId) {
     return (
       <main className="max-w-[1280px] mx-auto px-6 py-8">
         <div className="rounded-2xl border border-border bg-white p-8 text-center">
@@ -594,21 +584,23 @@ export function AuctionDetailPage() {
             </div>
           </Modal>
 
-          <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+          <div className="relative mt-4 bg-white border border-border rounded-2xl p-6 shadow-sm">
+            <div className="absolute -top-3 right-4">
+              <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-bold text-green-600 whitespace-nowrap">
+                <span className="material-symbols-outlined text-sm">
+                  trending_up
+                </span>
+                {bidCount}입찰
+              </span>
+            </div>
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
                 <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">
                   현재 최고가
                 </p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-black text-primary tracking-tighter">
-                    {formatKrw(currentPrice)}
-                  </span>
-                  <span className="text-sm font-bold text-green-500 flex items-center gap-0.5">
-                    <span className="material-symbols-outlined text-sm">
-                      trending_up
-                    </span>
-                    {bidCount}입찰
+                  <span className="text-5xl font-extrabold text-primary tracking-tight leading-none tabular-nums [font-family:Pretendard,sans-serif] no-underline">
+                    ₩{formatWonNumber(currentPrice)}
                   </span>
                 </div>
               </div>
@@ -644,14 +636,14 @@ export function AuctionDetailPage() {
                     onClick={() => setBidAmount(String(minBid))}
                     className="py-3 px-4 border border-border rounded-xl text-sm font-bold hover:border-primary hover:text-primary transition-all"
                   >
-                    {bidCount === 0 ? "등록가" : `+${formatKrw(minBid - currentPrice)}`}
+                    {bidCount === 0 ? "등록가" : `+₩${formatWonNumber(minBid - currentPrice)}`}
                   </button>
                   <button
                     type="button"
                     onClick={() => setBidAmount(String(minBid * 2))}
                     className="py-3 px-4 border border-border rounded-xl text-sm font-bold hover:border-primary hover:text-primary transition-all"
                   >
-                    +{formatKrw(minBid)}
+                    +₩{formatWonNumber(minBid)}
                   </button>
                 </div>
                 <div className="relative flex items-center">

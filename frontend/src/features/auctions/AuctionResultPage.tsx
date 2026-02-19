@@ -11,6 +11,61 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useMemo } from "react";
 import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
+import { isAuctionClosed, isValidAuctionId } from "./auctionUtils";
+
+type ResultBanner = {
+  message: string;
+  icon: string;
+};
+
+function resolveResultBanner(params: {
+  isFailed: boolean;
+  isSuccessLike: boolean;
+  isAuth: boolean;
+  hasProfile: boolean;
+  isMyAuction: boolean;
+  hasBidData: boolean;
+  isWinner: boolean;
+  hasParticipated: boolean;
+}): ResultBanner {
+  const {
+    isFailed,
+    isSuccessLike,
+    isAuth,
+    hasProfile,
+    isMyAuction,
+    hasBidData,
+    isWinner,
+    hasParticipated,
+  } = params;
+
+  if (isFailed) {
+    return { message: "경매가 유찰되었습니다", icon: "cancel" };
+  }
+
+  if (!isSuccessLike) {
+    return { message: "경매가 종료되었습니다", icon: "cancel" };
+  }
+
+  if (!isAuth || !hasProfile) {
+    return { message: "경매가 성공적으로 종료되었습니다", icon: "workspace_premium" };
+  }
+
+  if (isMyAuction) {
+    return { message: "경매가 성공적으로 끝났습니다", icon: "workspace_premium" };
+  }
+
+  if (hasBidData) {
+    if (isWinner) {
+      return { message: "경매에 성공하셨습니다", icon: "workspace_premium" };
+    }
+    if (hasParticipated) {
+      return { message: "아쉽게 경매에 실패하셨습니다", icon: "sentiment_dissatisfied" };
+    }
+  }
+
+  return { message: "경매가 성공적으로 종료되었습니다", icon: "workspace_premium" };
+}
 
 export function AuctionResultPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +73,7 @@ export function AuctionResultPage() {
   const queryClient = useQueryClient();
   const addToast = useToastStore((s) => s.add);
   const auctionId = Number(id);
+  const validAuctionId = isValidAuctionId(auctionId);
   const isAuth = useAuthStore((s) => s.isAuthenticated());
 
   const chooseDeliveryType = useMutation({
@@ -40,13 +96,13 @@ export function AuctionResultPage() {
   const { data: auction, isLoading } = useQuery({
     queryKey: ["auction", auctionId],
     queryFn: () => auctionApi.getById(auctionId),
-    enabled: Number.isInteger(auctionId),
+    enabled: validAuctionId,
   });
 
   const { data: bidPage } = useQuery({
     queryKey: ["bid", auctionId],
     queryFn: () => bidApi.list(auctionId),
-    enabled: Number.isInteger(auctionId),
+    enabled: validAuctionId,
   });
   const bids = bidPage?.content ?? [];
 
@@ -56,10 +112,11 @@ export function AuctionResultPage() {
     enabled: isAuth,
   });
 
-  // 경매 상태 확인 (auction이 없어도 안전하게 처리)
+  // 경매 상태 확인
   const isSuccess = auction?.status === "SUCCESS";
   const isFailed = auction?.status === "FAILED";
   const isEnded = auction?.status === "ENDED";
+  const isSuccessLike = isSuccess || (isEnded && auction.currentPrice > auction.startPrice);
 
   // 판매자인지 확인 (bidPage 없이도 확인 가능)
   const isMyAuction = useMemo(() => {
@@ -85,7 +142,7 @@ export function AuctionResultPage() {
   }, [isAuth, profile, auction, bidPage, bids, isSuccess, isEnded]);
 
   // 거래 대상(낙찰자/판매자)이라면 SUCCESS/ENDED 모두 주문 조회를 시도
-  const needsOrder = (isSuccess || isEnded) && (isWinner || isMyAuction);
+  const needsOrder = isAuctionClosed(auction?.status) && (isWinner || isMyAuction);
   const {
     data: order,
     isLoading: orderLoading,
@@ -108,6 +165,22 @@ export function AuctionResultPage() {
     },
   });
 
+  if (!validAuctionId) {
+    return (
+      <main className="flex flex-col items-center justify-center py-12 px-4">
+        <div className="rounded-2xl border border-border bg-white p-8 text-center max-w-[640px] w-full">
+          <p className="text-text-muted font-medium">잘못된 경매 번호입니다.</p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-primary font-semibold hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (isLoading || !auction) {
     return (
       <main className="flex flex-col items-center justify-center py-12 px-4">
@@ -117,70 +190,16 @@ export function AuctionResultPage() {
   }
   const img = auction.imageUrls?.[0];
 
-  // 메시지 결정 로직
-  let message = "경매가 종료되었습니다";
-  let icon = "cancel";
-  
-  // 유찰 상태는 인증 여부와 관계없이 동일하게 표시
-  if (isFailed) {
-    message = "경매가 유찰되었습니다";
-    icon = "cancel";
-  } 
-  // 성공한 경매 또는 종료된 경매인 경우 (ENDED 상태도 성공/실패 판단 가능)
-  else if (isSuccess || isEnded) {
-    // 인증된 사용자이고 프로필이 있는 경우 사용자별 메시지 표시
-    if (isAuth && profile) {
-      // 판매자 확인 (bidPage 없이도 가능)
-      if (isMyAuction) {
-        if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
-          message = "경매가 성공적으로 끝났습니다";
-          icon = "workspace_premium";
-        } else {
-          message = "경매가 종료되었습니다";
-          icon = "cancel";
-        }
-      } 
-      // 입찰 데이터가 로드된 경우 낙찰자/패찰자 확인
-      else if (bidPage && bids.length > 0) {
-        if (isWinner) {
-          message = "경매에 성공하셨습니다";
-          icon = "workspace_premium";
-        } else if (hasParticipated) {
-          message = "아쉽게 경매에 실패하셨습니다";
-          icon = "sentiment_dissatisfied";
-        } else {
-          // 입찰에 참여하지 않은 경우
-          if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
-            message = "경매가 성공적으로 종료되었습니다";
-            icon = "workspace_premium";
-          } else {
-            message = "경매가 종료되었습니다";
-            icon = "cancel";
-          }
-        }
-      }
-      // 입찰 데이터가 아직 없는 경우 (로딩 중이거나 입찰이 없음)
-      else {
-        if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
-          message = "경매가 성공적으로 종료되었습니다";
-          icon = "workspace_premium";
-        } else {
-          message = "경매가 종료되었습니다";
-          icon = "cancel";
-        }
-      }
-    } 
-    // 인증되지 않았거나 프로필이 없는 경우
-    else {
-      if (isSuccess || (isEnded && auction.currentPrice > auction.startPrice)) {
-        message = "경매가 성공적으로 종료되었습니다";
-        icon = "workspace_premium";
-      } else {
-        message = "경매가 종료되었습니다";
-        icon = "cancel";
-      }
-    }
-  }
+  const { message, icon } = resolveResultBanner({
+    isFailed,
+    isSuccessLike,
+    isAuth,
+    hasProfile: Boolean(profile),
+    isMyAuction,
+    hasBidData: Boolean(bidPage && bids.length > 0),
+    isWinner,
+    hasParticipated,
+  });
   
   return (
     <main className="flex flex-col items-center justify-center relative py-12 px-4 min-h-[60vh]">
@@ -194,7 +213,7 @@ export function AuctionResultPage() {
           <h1 className="text-text-main tracking-tight text-[32px] font-bold leading-tight px-8 text-center">
             {message}
           </h1>
-          {isAuth && isSuccess && (isWinner || isMyAuction) && (
+          {isAuth && isSuccessLike && (isWinner || isMyAuction) && (
             <div className="mt-4 px-6 py-2 bg-primary text-white rounded-full font-bold text-xl shadow-md">
               낙찰가: {formatKrw(auction.currentPrice)}
             </div>

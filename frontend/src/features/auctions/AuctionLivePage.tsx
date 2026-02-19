@@ -11,25 +11,17 @@ import { getApiErrorMessage } from "@/lib/api";
 import { useToastStore } from "@/stores/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
-
-function minNextBid(current: number): number {
-  const next = Math.ceil((current * 1.1) / 10) * 10;
-  return next > current ? next : current + 10;
-}
-
-/** 최소 입찰가: 최초 입찰(입찰 수 0)이면 등록가, 그 외에는 현재가 기준 10% 상승 */
-function getMinBid(
-  currentPrice: number,
-  startPrice: number,
-  bidCount: number
-): number {
-  if (bidCount === 0) return startPrice;
-  return minNextBid(currentPrice);
-}
+import {
+  formatWonNumber,
+  getMinBid,
+  isAuctionBiddable,
+  isValidAuctionId,
+} from "./auctionUtils";
 
 export function AuctionLivePage() {
   const { id } = useParams<{ id: string }>();
   const auctionId = Number(id);
+  const validAuctionId = isValidAuctionId(auctionId);
   const queryClient = useQueryClient();
   const isAuth = useAuthStore((s) => s.isAuthenticated());
   const addToast = useToastStore((s) => s.add);
@@ -42,13 +34,13 @@ export function AuctionLivePage() {
   const { data: auction, isLoading } = useQuery({
     queryKey: ["auction", auctionId],
     queryFn: () => auctionApi.getById(auctionId),
-    enabled: Number.isInteger(auctionId),
+    enabled: validAuctionId,
   });
 
   const { data: bidPage } = useQuery({
     queryKey: ["bid", auctionId],
     queryFn: () => bidApi.list(auctionId),
-    enabled: Number.isInteger(auctionId),
+    enabled: validAuctionId,
   });
   const bids = bidPage?.content ?? [];
 
@@ -66,7 +58,7 @@ export function AuctionLivePage() {
     profile.userId === auction.sellerId;
 
   useAuctionWebSocket(
-    Number.isInteger(auctionId) ? auctionId : null,
+    validAuctionId ? auctionId : null,
     (data) =>
       setWsSnapshot((prev) =>
         Object.keys(data).length ? { ...prev, ...data } : prev
@@ -87,6 +79,7 @@ export function AuctionLivePage() {
   const startPrice = auction?.startPrice ?? currentPrice;
   const bidCount = wsSnapshot.bidCount ?? auction?.bidCount ?? 0;
   const minBid = getMinBid(currentPrice, startPrice, bidCount);
+  const canBidNow = isAuctionBiddable(auction?.status);
   const endAt = wsSnapshot.endAt ?? auction?.endAt;
   const [remaining, setRemaining] = useState(0);
   useEffect(() => {
@@ -115,8 +108,7 @@ export function AuctionLivePage() {
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
-  const handleQuickBid = (delta: number) => {
-    const amount = minBid + delta;
+  const handleQuickBid = (amount: number) => {
     if (!isAuth) {
       addToast("로그인이 필요합니다.", "error");
       return;
@@ -125,8 +117,32 @@ export function AuctionLivePage() {
       addToast("본인이 등록한 경매에는 입찰할 수 없습니다.", "error");
       return;
     }
+    if (!canBidNow) {
+      addToast("현재 상태에서는 입찰할 수 없습니다.", "error");
+      return;
+    }
+    if (amount < minBid) {
+      addToast(`최소 입찰가는 ₩${formatWonNumber(minBid)}입니다.`, "error");
+      return;
+    }
     placeBid.mutate(amount);
   };
+
+  if (!validAuctionId) {
+    return (
+      <main className="max-w-[1600px] mx-auto px-4 md:px-10 py-6">
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <p className="text-text-muted font-medium">잘못된 경매 번호입니다.</p>
+          <Link
+            to="/"
+            className="mt-4 inline-block text-primary font-semibold hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   if (isLoading || !auction) {
     return (
@@ -232,24 +248,26 @@ export function AuctionLivePage() {
             <div className="flex-1 grid grid-cols-3 gap-3 w-full">
               <Button
                 variant="secondary"
-                onClick={() => handleQuickBid(0)}
-                disabled={isMyAuction}
+                onClick={() => handleQuickBid(minBid)}
+                disabled={isMyAuction || !canBidNow || placeBid.isPending}
               >
-                +1,000
+                {bidCount === 0
+                  ? "등록가"
+                  : `+₩${formatWonNumber(minBid - currentPrice)}`}
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => handleQuickBid(5000)}
-                disabled={isMyAuction}
+                onClick={() => handleQuickBid(minBid + 5000)}
+                disabled={isMyAuction || !canBidNow || placeBid.isPending}
               >
-                +5,000
+                +₩5,000
               </Button>
               <Button
                 variant="secondary"
-                onClick={() => handleQuickBid(10000)}
-                disabled={isMyAuction}
+                onClick={() => handleQuickBid(minBid + 10000)}
+                disabled={isMyAuction || !canBidNow || placeBid.isPending}
               >
-                +10,000
+                +₩10,000
               </Button>
             </div>
             <Link to={`/auctions/${auctionId}`} className="w-full md:w-auto">
