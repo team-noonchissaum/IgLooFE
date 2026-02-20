@@ -34,6 +34,9 @@ const sortLabels: Record<SortType, string> = {
 };
 
 const radiusOptions: RadiusKm[] = [1, 3, 7, 10, 20, 50];
+const CLIENT_PAGE_SIZE = 12;
+const SEARCH_FETCH_SIZE = 100;
+const SEARCH_FETCH_MAX_PAGES = 30;
 
 function toAuctionListRes(auction: AuctionRes): AuctionListRes {
   return {
@@ -70,6 +73,47 @@ function formatRemaining(remainingMs: number): string {
     2,
     "0",
   )}:${String(seconds).padStart(2, "0")}`;
+}
+
+function sortAuctionsByType(items: AuctionListRes[], sort: SortType): AuctionListRes[] {
+  return [...items].sort((a, b) => {
+    switch (sort) {
+      case "LATEST":
+        // 목록 DTO에 생성시각이 없어 id를 최신순의 대리 지표로 사용
+        return b.auctionId - a.auctionId;
+      case "BID_COUNT":
+        return (b.bidCount ?? 0) - (a.bidCount ?? 0) || b.auctionId - a.auctionId;
+      case "DEADLINE":
+        return (
+          (new Date(a.endAt).getTime() || Number.MAX_SAFE_INTEGER) -
+            (new Date(b.endAt).getTime() || Number.MAX_SAFE_INTEGER) ||
+          b.auctionId - a.auctionId
+        );
+      case "PRICE_HIGH":
+        return b.currentPrice - a.currentPrice || b.auctionId - a.auctionId;
+      case "PRICE_LOW":
+        return a.currentPrice - b.currentPrice || b.auctionId - a.auctionId;
+      default:
+        return 0;
+    }
+  });
+}
+
+function paginateAuctions(items: AuctionListRes[], page: number) {
+  const startIndex = page * CLIENT_PAGE_SIZE;
+  const endIndex = startIndex + CLIENT_PAGE_SIZE;
+  const totalElements = items.length;
+  const totalPages = Math.ceil(totalElements / CLIENT_PAGE_SIZE);
+
+  return {
+    content: items.slice(startIndex, endIndex),
+    totalElements,
+    totalPages,
+    size: CLIENT_PAGE_SIZE,
+    number: page,
+    first: page === 0,
+    last: endIndex >= totalElements,
+  };
 }
 
 /** 카테고리 트리에서 선택된 카테고리와 모든 하위 카테고리 ID를 수집 */
@@ -221,6 +265,30 @@ export function HomePage() {
     return [categoryId];
   }, [categoryId, categories]);
 
+  const fetchAllSearchPages = async (params: {
+    keyword?: string;
+    categoryId?: number;
+    sort: SortType;
+  }) => {
+    const merged: AuctionListRes[] = [];
+    for (let pageIndex = 0; pageIndex < SEARCH_FETCH_MAX_PAGES; pageIndex++) {
+      const pageResult = await auctionApi.search({
+        keyword: params.keyword,
+        categoryId: params.categoryId,
+        sort: params.sort,
+        page: pageIndex,
+        size: SEARCH_FETCH_SIZE,
+      });
+      if (pageResult?.content?.length) {
+        merged.push(...pageResult.content);
+      }
+      if (!pageResult || pageResult.last || (pageResult.content?.length ?? 0) === 0) {
+        break;
+      }
+    }
+    return merged;
+  };
+
   const { data: searchData, isLoading } = useQuery({
     queryKey: [
       "auctions",
@@ -243,72 +311,17 @@ export function HomePage() {
       // 가격 정렬 시 백엔드 Redis 정렬은 단일 카테고리만 지원하므로
       // 프론트엔드에서 모든 결과를 받아서 정렬하도록 처리
       const isPriceSort = sort === "PRICE_HIGH" || sort === "PRICE_LOW";
-      
-      if (!categoryIdsToSearch || categoryIdsToSearch.length === 0) {
-        // 카테고리가 없을 때 가격 정렬은 일반 정렬로 처리 (백엔드에서 빈 결과 반환 방지)
-        if (isPriceSort) {
-          // 모든 경매를 가져와서 프론트에서 정렬
-          const allResults = await auctionApi.search({
-            keyword: keyword || undefined,
-            categoryId: undefined,
-            sort: "LATEST", // 백엔드에서 가격 정렬은 카테고리 필수이므로 일반 정렬 사용
-            page: 0,
-            size: 1000, // 충분히 큰 값
-          });
-          
-          // 상태 필터링
-          const excludedStatuses = NON_LISTED_AUCTION_STATUSES;
-          let filtered = (allResults?.content ?? []).filter(
-            (a) => !excludedStatuses.includes(a.status)
-          );
-          
-          // keyword 필터링
-          if (keyword) {
-            const lowerKeyword = keyword.toLowerCase();
-            filtered = filtered.filter((a) =>
-              a.title.toLowerCase().includes(lowerKeyword)
-            );
-          }
-          
-          // 가격 정렬
-          const sorted = [...filtered].sort((a, b) => {
-            return sort === "PRICE_HIGH" 
-              ? b.currentPrice - a.currentPrice
-              : a.currentPrice - b.currentPrice;
-          });
-          
-          // 페이지네이션
-          const startIndex = page * 12;
-          const endIndex = startIndex + 12;
-          return {
-            content: sorted.slice(startIndex, endIndex),
-            totalElements: sorted.length,
-            totalPages: Math.ceil(sorted.length / 12),
-            size: 12,
-            number: page,
-            first: page === 0,
-            last: endIndex >= sorted.length,
-          };
-        }
-        
-        return auctionApi.search({
-          keyword: keyword || undefined,
-          categoryId: undefined,
-          sort,
-          page,
-          size: 12,
-        });
-      }
 
-      // 여러 카테고리 결과를 병렬로 가져오기
-      // 가격 정렬 시 백엔드 Redis 정렬은 단일 카테고리만 지원하므로 일반 정렬로 호출
-      const queries = categoryIdsToSearch.map((catId) =>
-        auctionApi.search({
+      const targetCategoryIds = categoryIdsToSearch && categoryIdsToSearch.length > 0
+        ? categoryIdsToSearch
+        : [undefined];
+
+      // 카테고리별 전체 페이지를 수집한 뒤 합쳐서 정렬/페이징
+      const queries = targetCategoryIds.map((catId) =>
+        fetchAllSearchPages({
           keyword: isPriceSort ? undefined : (keyword || undefined),
           categoryId: catId,
-          sort: isPriceSort ? "LATEST" : sort, // 가격 정렬 시 일반 정렬로 호출
-          page: 0,
-          size: 100, // 충분히 큰 값으로 설정
+          sort: isPriceSort ? "LATEST" : sort,
         })
       );
       
@@ -317,8 +330,8 @@ export function HomePage() {
       // 결과 합치기
       const allAuctions: AuctionListRes[] = [];
       results.forEach((result) => {
-        if (result?.content) {
-          allAuctions.push(...result.content);
+        if (result?.length) {
+          allAuctions.push(...result);
         }
       });
 
@@ -333,46 +346,16 @@ export function HomePage() {
         (a) => !excludedStatuses.includes(a.status)
       );
 
-      // keyword 필터링 (가격 정렬 시 keyword가 제외되었으므로 프론트에서 필터링)
-      if (keyword && isPriceSort) {
+      // keyword 필터링 (가격 정렬 시에는 백엔드 keyword를 사용하지 않으므로 프론트에서 처리)
+      if (keyword) {
         const lowerKeyword = keyword.toLowerCase();
         filteredAuctions = filteredAuctions.filter((a) =>
           a.title.toLowerCase().includes(lowerKeyword)
         );
       }
 
-      // 정렬 적용
-      const sortedAuctions = [...filteredAuctions].sort((a, b) => {
-        switch (sort) {
-          case "LATEST":
-            return b.auctionId - a.auctionId;
-          case "BID_COUNT":
-            return (b.bidCount ?? 0) - (a.bidCount ?? 0);
-          case "DEADLINE":
-            return new Date(a.endAt).getTime() - new Date(b.endAt).getTime();
-          case "PRICE_HIGH":
-            return b.currentPrice - a.currentPrice;
-          case "PRICE_LOW":
-            return a.currentPrice - b.currentPrice;
-          default:
-            return 0;
-        }
-      });
-
-      // 페이지네이션 적용
-      const startIndex = page * 12;
-      const endIndex = startIndex + 12;
-      const paginatedAuctions = sortedAuctions.slice(startIndex, endIndex);
-
-      return {
-        content: paginatedAuctions,
-        totalElements: sortedAuctions.length,
-        totalPages: Math.ceil(sortedAuctions.length / 12),
-        size: 12,
-        number: page,
-        first: page === 0,
-        last: endIndex >= sortedAuctions.length,
-      };
+      const sortedAuctions = sortAuctionsByType(filteredAuctions, sort);
+      return paginateAuctions(sortedAuctions, page);
     },
     retry: false,
   });
