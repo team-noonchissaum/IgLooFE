@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { chatApi, type MyChatRoomRes } from "@/services/chatApi";
 import { userApi } from "@/services/userApi";
 import { reportApi } from "@/services/reportApi";
+import { orderApi } from "@/services/orderApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useToastStore } from "@/stores/toastStore";
@@ -119,17 +120,31 @@ function ChatRoomPanel({
   rooms: MyChatRoomRes[];
   opponentMap: Record<number, string>;
 }) {
+  const queryClient = useQueryClient();
   const room = rooms.find((r) => r.roomId === roomId);
   const opponentId = room?.opponentId;
   const addToast = useToastStore((s) => s.add);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDescription, setReportDescription] = useState("");
+  const [directConfirmed, setDirectConfirmed] = useState(false);
 
   const { data: roomDetail } = useQuery({
     queryKey: ["chat", "room", roomId],
     queryFn: () => chatApi.getRoom(roomId),
   });
+  const auctionId = roomDetail?.auctionId ?? room?.auctionId ?? null;
+
+  const { data: orderByAuction } = useQuery({
+    queryKey: ["order", "by-auction", auctionId],
+    queryFn: () => orderApi.getByAuction(auctionId!),
+    enabled: auctionId != null,
+  });
+
+  const canConfirmDirect =
+    roomDetail?.myRole === "BUYER" &&
+    orderByAuction?.deliveryType === "DIRECT" &&
+    !directConfirmed;
 
   const effectiveOpponentId = opponentId ?? roomDetail?.opponentId;
   const { data: opponentProfile } = useQuery({
@@ -200,6 +215,21 @@ function ChatRoomPanel({
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
+  const confirmDirect = useMutation({
+    mutationFn: () => orderApi.confirmDirect(orderByAuction!.orderId),
+    onSuccess: () => {
+      setDirectConfirmed(true);
+      addToast("직거래 구매확정이 완료되었습니다.", "success");
+      queryClient.invalidateQueries({ queryKey: ["order", "by-auction", auctionId] });
+      queryClient.invalidateQueries({ queryKey: ["chat", "rooms"] });
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
+  });
+
+  useEffect(() => {
+    setDirectConfirmed(false);
+  }, [roomId]);
+
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
@@ -226,11 +256,22 @@ function ChatRoomPanel({
             경매 #{roomDetail.auctionId}
           </span>
         )}
+        {canConfirmDirect && (
+          <Button
+            variant="primary"
+            size="sm"
+            className="ml-auto"
+            onClick={() => confirmDirect.mutate()}
+            loading={confirmDirect.isPending}
+          >
+            구매확정
+          </Button>
+        )}
         {effectiveOpponentId != null && (
           <button
             type="button"
             onClick={() => setReportModalOpen(true)}
-            className="ml-auto p-2 rounded-lg border border-border text-text-muted hover:bg-gray-100 hover:text-red-500 transition-colors"
+            className="ml-2 p-2 rounded-lg border border-border text-text-muted hover:bg-gray-100 hover:text-red-500 transition-colors"
             aria-label="상대 유저 신고"
             title="상대 유저 신고"
           >
