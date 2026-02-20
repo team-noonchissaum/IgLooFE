@@ -5,6 +5,7 @@ import { auctionApi } from "@/services/auctionApi";
 import { bidApi } from "@/services/bidApi";
 import { userApi } from "@/services/userApi";
 import { orderApi } from "@/services/orderApi";
+import { chatApi } from "@/services/chatApi";
 import { formatKrw } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -76,18 +77,31 @@ export function AuctionResultPage() {
   const validAuctionId = isValidAuctionId(auctionId);
   const isAuth = useAuthStore((s) => s.isAuthenticated());
 
+  const ensureDirectChatRoom = async (): Promise<number> => {
+    const room = await chatApi.ensureRoomFromAuction(auctionId);
+    if (!room?.roomId) {
+      throw new Error("채팅방 정보를 찾을 수 없습니다.");
+    }
+    return room.roomId;
+  };
+
   const chooseDeliveryType = useMutation({
     mutationFn: ({ orderId, type }: { orderId: number; type: "DIRECT" | "SHIPMENT" }) =>
       orderApi.chooseDeliveryType(orderId, type),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       queryClient.invalidateQueries({ queryKey: ["order", "by-auction", auctionId] });
       queryClient.invalidateQueries({ queryKey: ["chat", "rooms"] });
       addToast(
         res.deliveryType === "DIRECT" ? "직거래가 선택되었습니다." : "택배배송이 선택되었습니다.",
         "success"
       );
-      if (res.deliveryType === "DIRECT" && res.roomId != null) {
-        navigate(`/chat?roomId=${res.roomId}`);
+      if (res.deliveryType === "DIRECT") {
+        try {
+          const roomId = res.roomId ?? (await ensureDirectChatRoom());
+          navigate(`/chat?roomId=${roomId}`);
+        } catch (err) {
+          addToast(getApiErrorMessage(err), "error");
+        }
       }
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
@@ -336,11 +350,19 @@ export function AuctionResultPage() {
                 </>
               ) : order ? (
                 <div className="flex flex-col sm:flex-row gap-4">
-                  {order.deliveryType === "DIRECT" && order.roomId && (
+                  {order.deliveryType === "DIRECT" && (
                     <Button
                       variant="primary"
                       className="flex-1 w-full"
-                      onClick={() => navigate(`/chat?roomId=${order.roomId}`)}
+                      onClick={async () => {
+                        try {
+                          const roomId = order.roomId ?? (await ensureDirectChatRoom());
+                          queryClient.invalidateQueries({ queryKey: ["chat", "rooms"] });
+                          navigate(`/chat?roomId=${roomId}`);
+                        } catch (err) {
+                          addToast(getApiErrorMessage(err), "error");
+                        }
+                      }}
                     >
                       <span className="material-symbols-outlined">chat</span>
                       1:1 채팅
