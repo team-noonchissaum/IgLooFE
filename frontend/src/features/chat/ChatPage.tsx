@@ -271,7 +271,7 @@ function ChatRoomPanel({
           <button
             type="button"
             onClick={() => setReportModalOpen(true)}
-            className="ml-2 p-2 rounded-lg border border-border text-text-muted hover:bg-gray-100 hover:text-red-500 transition-colors"
+            className={`${canConfirmDirect ? "ml-2" : "ml-auto"} p-2 rounded-lg border border-border text-text-muted hover:bg-gray-100 hover:text-red-500 transition-colors`}
             aria-label="상대 유저 신고"
             title="상대 유저 신고"
           >
