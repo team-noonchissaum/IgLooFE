@@ -50,13 +50,13 @@ Vite + React + TypeScript 기반 SPA입니다.
 
 ## 프론트엔드 동작 흐름
 
-![System Architecture](https://github.com/user-attachments/assets/39bf4fa3-0e1d-4dc4-9250-7d54d3f5bf74)
+![System Architecture](https://github.com/user-attachments/assets/92f3639e-4c8f-456d-9a45-bd3e9c55fbc1)
 
-1. 사용자가 브라우저에서 Vercel로 접속하면 React SPA가 로드됨
-2. 화면 데이터 요청은 TanStack Query가 REST API로 호출
-3. 인증/세션 상태는 Zustand가 관리
-4. 실시간 경매/알림/채팅은 STOMP(SockJS)로 WSS 연결해 구독
-5. 백엔드 응답(REST/WS)을 받아 UI와 캐시를 갱신
+- 사용자가 브라우저에서 Vercel로 접속하면 React SPA를 로드
+- 화면 데이터 요청은 TanStack Query가 REST API로 호출
+- 인증/세션 상태는 Zustand가 관리
+- 실시간 경매/알림/채팅은 STOMP(SockJS)로 WSS 연결해 구독
+- 백엔드 응답(REST/WS)을 받아 UI와 캐시를 갱신
 
 ---
 
