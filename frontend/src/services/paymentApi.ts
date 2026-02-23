@@ -23,7 +23,7 @@ export const paymentApi = {
         "/api/payments/confirm",
         body
       )
-      .then(unwrapData),
+      .then((res) => res.data?.data ?? null),
 
   abort: (body: PaymentAbortReq) =>
     api.post<{ message: string; data: null }>("/api/payments/abort", body),

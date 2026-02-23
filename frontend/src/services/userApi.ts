@@ -24,7 +24,13 @@ export const userApi = {
     api
       .get<{ message: string; data: PageResponse<AuctionRes> }>(
         "/api/mypage/auctions",
-        { params: { page: params?.page ?? 0, size: params?.size ?? 10 } }
+        {
+          params: {
+            page: params?.page ?? 0,
+            size: params?.size ?? 10,
+            sort: "createdAt,desc",
+          },
+        }
       )
       .then(unwrapData),
 
