@@ -8,6 +8,7 @@ import { bidApi } from "@/services/bidApi";
 import { userApi } from "@/services/userApi";
 import { wishApi } from "@/services/wishApi";
 import { reportApi } from "@/services/reportApi";
+import { orderApi } from "@/services/orderApi";
 import { getApiErrorMessage } from "@/lib/api";
 import { formatKrw, formatRelative } from "@/lib/format";
 import { useToastStore } from "@/stores/toastStore";
@@ -134,6 +135,14 @@ export function AuctionDetailPage() {
     if (!isAuth || !profile || bids.length === 0) return false;
     return bids.some(bid => bid.bidderNickname === profile.nickname);
   }, [isAuth, profile, bids]);
+
+  const needsOrder = isAuth && (status === "SUCCESS" || status === "ENDED") && (isWinner || isMyAuction);
+  const { data: order, isLoading: orderLoading } = useQuery({
+    queryKey: ["order", "by-auction", id],
+    queryFn: () => orderApi.getByAuction(id),
+    enabled: needsOrder,
+    retry: false,
+  });
 
   const placeBid = useMutation({
     mutationFn: (amount: number) =>
@@ -729,20 +738,33 @@ export function AuctionDetailPage() {
                         <p className="text-sm text-green-700 dark:text-green-300 mb-4">
                           낙찰가: {formatKrw(currentPrice)}
                         </p>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <Link to="/chat" className="flex-1">
-                            <Button variant="primary" className="w-full">
-                              <span className="material-symbols-outlined">chat</span>
-                              1:1 채팅
-                            </Button>
-                          </Link>
-                          <Link to={`/delivery?auctionId=${id}`} className="flex-1">
-                            <Button variant="outline" className="w-full">
-                              <span className="material-symbols-outlined">local_shipping</span>
-                              배송 정보
-                            </Button>
-                          </Link>
-                        </div>
+                        {orderLoading ? (
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            거래 정보를 불러오는 중입니다...
+                          </p>
+                        ) : order?.deliveryType === "DIRECT" ? (
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Link to={order.roomId ? `/chat?roomId=${order.roomId}` : "/chat"} className="flex-1">
+                              <Button variant="primary" className="w-full">
+                                <span className="material-symbols-outlined">chat</span>
+                                1:1 채팅
+                              </Button>
+                            </Link>
+                          </div>
+                        ) : order?.deliveryType === "SHIPMENT" ? (
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Link to={`/delivery?auctionId=${id}`} className="flex-1">
+                              <Button variant="outline" className="w-full">
+                                <span className="material-symbols-outlined">local_shipping</span>
+                                배송 정보
+                              </Button>
+                            </Link>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            구매자가 거래 방식을 선택하면 해당 버튼이 표시됩니다.
+                          </p>
+                        )}
                       </div>
                     ) : hasParticipated && status === "SUCCESS" && isWinner ? (
                       <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6">
@@ -757,20 +779,33 @@ export function AuctionDetailPage() {
                         <p className="text-sm text-green-700 dark:text-green-300 mb-4">
                           낙찰가: {formatKrw(currentPrice)}
                         </p>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <Link to="/chat" className="flex-1">
-                            <Button variant="primary" className="w-full">
-                              <span className="material-symbols-outlined">chat</span>
-                              1:1 채팅
-                            </Button>
-                          </Link>
-                          <Link to={`/delivery?auctionId=${id}`} className="flex-1">
-                            <Button variant="outline" className="w-full">
-                              <span className="material-symbols-outlined">local_shipping</span>
-                              배송 정보
-                            </Button>
-                          </Link>
-                        </div>
+                        {orderLoading ? (
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            거래 정보를 불러오는 중입니다...
+                          </p>
+                        ) : order?.deliveryType === "DIRECT" ? (
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Link to={order.roomId ? `/chat?roomId=${order.roomId}` : "/chat"} className="flex-1">
+                              <Button variant="primary" className="w-full">
+                                <span className="material-symbols-outlined">chat</span>
+                                1:1 채팅
+                              </Button>
+                            </Link>
+                          </div>
+                        ) : order?.deliveryType === "SHIPMENT" ? (
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Link to={`/delivery?auctionId=${id}`} className="flex-1">
+                              <Button variant="outline" className="w-full">
+                                <span className="material-symbols-outlined">local_shipping</span>
+                                배송 정보
+                              </Button>
+                            </Link>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            거래 방식을 선택하면 해당 버튼이 표시됩니다.
+                          </p>
+                        )}
                       </div>
                     ) : hasParticipated && status === "SUCCESS" && !isWinner ? (
                       <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
